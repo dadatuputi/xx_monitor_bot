@@ -1,11 +1,17 @@
-// Script from https://discordjs.guide/creating-your-bot/command-deployment.html#command-registration
+// Script from https://discordjs.guide/creating-your-bot/command-deployment.html#command-registration, modified
 
-const { REST, Routes } = require('discord.js');
-const fs = require('node:fs');
+var env = process.env.NODE_ENV || 'development';
 
+// Needs to be in development, throw error if otherwise
+if (env !== 'development') {
+    throw new Error(`${require('path').basename(__filename)} must be run in development mode`);
+}
 var dotenv = require('dotenv').config({ path: '../.env' });
 var dotenvExpand = require('dotenv-expand');
 dotenvExpand.expand(dotenv);
+
+const { REST, Routes } = require('discord.js');
+const fs = require('node:fs');
 
 const clientId = process.env.APP_ID;
 const guildId = process.env.DEV_GUILD_ID;
