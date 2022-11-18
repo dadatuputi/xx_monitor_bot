@@ -1,0 +1,44 @@
+version: '3.1'
+
+services:
+
+  mongo:
+    image: mongo
+    container_name: xx-monitor-bot-mongo
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME          # Value-less variables are pulled directly from .env
+      - MONGO_INITDB_ROOT_PASSWORD
+    volumes:
+      - ./mongo/db:/data/db
+      - ./mongo/config:/data/configdb
+    command: --port ${MONGO_PORT} --bind_ip 0.0.0.0 --quiet
+
+  bot:
+    container_name: xx-monitor-bot
+    restart: always
+    depends_on: 
+      - mongo
+    build:
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+
+  watchtower:
+    # Watchtower will pull down your new image, gracefully shut down your existing container 
+    # and restart it with the same options that were used when it was deployed initially
+    # https://github.com/containrrr/watchtower
+    image: containrrr/watchtower
+    container_name: xx-monitor-bot-watchtower
+    restart: always
+    depends_on: 
+      - bot
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE
+      - TZ
+      

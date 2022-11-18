@@ -1,0 +1,4 @@
+bot/node_modules
+bot/npm-debug.log
+**/.git
+**/docker
