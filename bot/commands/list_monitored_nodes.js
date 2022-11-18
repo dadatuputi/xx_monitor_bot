@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const db = require('../db.js');
+const db = require('../db.js'); // TODO: don't connect to the db until it's been intentionally done so it doesn't try to connect on deploy-commands.js
 const moment = require('moment');
 const base64url = require('base64url');
 
