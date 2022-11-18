@@ -1,6 +1,17 @@
 # Getting Started
 
-Clone this repo into your linux environment. Requires docker.
+Clone this repo into your linux environment. 
+
+### Requirements
+
+* `docker`
+
+### Development Requirements
+
+If you want to change the code and test it outside docker, install:
+
+* `nodejs`
+* `npm`
 
 ## Step 1: Create a Discord Application on the Discord Developer Portal
 
@@ -38,7 +49,10 @@ Run the following command to publish the slash commands to your server as specif
 
 ```bash
 $ cd bot
+$ npm install
 $ node deploy-commands.js
+$ [... command output ...]
+$ cd ..
 ```
 
 You should see a success message that 3 commands were published.
@@ -89,17 +103,18 @@ This command will instruct the bot to stop monitor the given node for you.
 
 ## Running bot in development mode
 
-To run the bot outside docker for testing or development, first start up an ephemeral mongodb service from the `bot\` directory:
+To run the bot outside docker for testing or development, first start up an ephemeral mongodb service:
 
 ```bash
 $ cd bot
 $ docker compose -f mongo-only-compose.yml --env-file ../.env up
 ```
 
-From another terminal in the `bot\` directory, run:
+From another terminal, run:
 
 ```bash
 $ cd bot
+$ npm install       # if it hasn't been run before
 $ node index.js
 ```
 
