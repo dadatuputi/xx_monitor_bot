@@ -1,4 +1,4 @@
-// Polls the dashboard API and gets the entire list of nodes every 30s
+// Polls the dashboard API and gets the entire list of nodes every ENDPOINT_POLLING seconds
 let request = require('request');
 const async = require('async');
 const db = require('./db.js');
