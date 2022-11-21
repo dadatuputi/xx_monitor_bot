@@ -36,12 +36,17 @@ https://discord.com/api/oauth2/authorize?client_id=<APPLICATION_ID>&permissions=
 
 ## Step 3: Set up environmental variables
 
-Copy `.env.template` to `.env` and fill in the the missing variables, such as the Discord Token and App ID. Edit any others as desired. If you are using a test server, copy the server id to the `DEV_GUILD_ID` variable
+Copy `.env.template` to `.env`:
 
 ```bash
 $ cp .env.template .env
 $ vi .env
 ```
+
+Fill in missing variables in `.env`, such as the Discord Token and App ID. Edit any others as desired. If you are using a test server, copy the server id to the `DEV_GUILD_ID` variable. The server id is found in Discord through these steps:
+
+1. Enable `Developer Mode` in the Discord App
+2. Right click on the server and select `Copy ID`
 
 ## Step 4: Publish the commands to your server
 
