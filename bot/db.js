@@ -1,20 +1,27 @@
 const { MongoClient } = require('mongodb');
 
-
 // Initialize mongodb
 console.log(`Connecting to mongo at ${process.env.MONGO_URI}`)
 const client = new MongoClient(process.env.MONGO_URI);
 const db = client.db('xx');
 const mainnet = db.collection('mainnet');
+const stats = client.db('stats');
+const actions = stats.collection('actions');
 
-
-// Database model - one row for each node monitored
-// [{   user: discord_id, 
+// Record formats: 
+// xx monitor record - one row for each node monitored
+// {    user: discord_id, 
 //      node: node_id,
 //      status: bool - Online=true, Offline=false, Unknown=null (this is initial status until the poller updates it),
 //      changed: timestamp of last state change,
-//  }, ...
-// ]
+// }
+//
+// user action record - one row for each user action taken
+// {    user: discord_id,
+//      time: timestamp,
+//      action: usually the command name,
+//      data: data for action
+// }
 
 
 const status = Object.freeze({
@@ -27,6 +34,16 @@ const status_xx = Object.freeze({
     'online': status.ONLINE,
     'not currently a validator': status.OFFLINE
 });
+
+
+async function log_action(user_id, action, data) {
+    // Add a record for an action taken by a user
+
+    const new_doc = {user: user_id, time: new Date(), action: action, data: data}
+    const options = {};
+    const result = await actions.insertOne(new_doc);
+    return result;
+}
 
 
 async function add_node(user_id, node_id) {
@@ -81,4 +98,4 @@ async function delete_node(user_id, node_id) {
 }
 
 
-module.exports = { add_node, update_node_status, list_user_nodes, delete_node, status, sutats, status_xx }
+module.exports = { log_action, add_node, update_node_status, list_user_nodes, delete_node, status, sutats, status_xx }
