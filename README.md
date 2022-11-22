@@ -140,7 +140,7 @@ To run the bot outside docker for testing or development, first start up an ephe
 
 ```bash
 $ cd bot
-$ docker compose -f mongo-only-compose.yml --env-file ../.env up -V
+$ docker compose -f mongo-only-compose.yml --env-file ../.env up
 ```
 
 From another terminal, run:
@@ -153,3 +153,8 @@ $ node index.js
 
 Now you can run the app without building a docker image for each test run.
  
+When you are done testing, you can clean up the containers by returning to the `docker compose` terminal and stopping the `mongo` services with `Ctrl-c` and:
+
+```bash
+$ docker compose -f mongo-only-compose.yml -v
+```
