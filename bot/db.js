@@ -27,14 +27,16 @@ const actions = stats.collection('actions');
 
 
 const status = Object.freeze({
-    ONLINE: true,
-    OFFLINE: false,
+    ONLINE: 'online',
+    OFFLINE: 'offline',
+    UNELECTED: 'unelected',
     UNKNOWN: null
 });
 const sutats = Object.freeze(Object.entries(status).reduce((acc, [key, value]) => (acc[value] = key, acc), {}))
 const status_xx = Object.freeze({
     'online': status.ONLINE,
-    'not currently a validator': status.OFFLINE
+    'offline': status.OFFLINE,
+    'not currently a validator': status.UNELECTED
 });
 
 

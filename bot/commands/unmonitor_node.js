@@ -14,6 +14,7 @@ module.exports = {
 	async execute(interaction, db) {
 		const id = interaction.options.getString('id');
 		const user = interaction.user;
+		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
 		var reply_string = ''
 
 		// Get list of users subscriptions
@@ -26,7 +27,7 @@ module.exports = {
 			reply_string = `💢 Error: You are not monitoring node \`${id}\`.`
 		}
 
-		await interaction.reply({ content: reply_string, ephemeral: true });
+		await interaction.reply({ content: reply_string, ephemeral: eph });
 		console.log(`User interaction: ${id}: ${reply_string}`)
 	},
 	async autocomplete(interaction, db) {
