@@ -94,6 +94,8 @@ module.exports = {
 		.setDescription('Display a list of validator nodes that you are monitoring'),
 	async execute(interaction, db) {
 		const user = interaction.user;
+		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
+
 		console.log(`User interaction: ${user.id}: listed nodes`)
 
 		// if this is in a channel (not dms), use fancy
@@ -103,7 +105,7 @@ module.exports = {
 			var { text, components } = await build_response(db, user.id, false);		// build simple list
 		}
 
-		await interaction.reply({ content: text, components: components, ephemeral: true, flags: MessageFlags.SuppressEmbeds });
+		await interaction.reply({ content: text, components: components, ephemeral: eph, flags: MessageFlags.SuppressEmbeds });
 
 		// if we have button components, make sure we have the right callback
 		if (components.length) {
@@ -121,7 +123,7 @@ module.exports = {
 					var reply_string = `🗑️ You are no longer monitoring node \`${i.customId}\`.`
 					var { text, components } = await build_response(db, user.id);
 					await i.update({ content: text, components: components });
-					await interaction.followUp({ content: reply_string, ephemeral: true });
+					await interaction.followUp({ content: reply_string, ephemeral: eph });
 				}
 			});
 
