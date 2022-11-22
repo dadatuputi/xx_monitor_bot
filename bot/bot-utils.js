@@ -79,14 +79,29 @@ async function deploy(guildId=null) {
 		.command('deploy')
 		.description('Deploy commands to server(s)')
 		.addOption(new Option('--server <id>', 'Deploy to the given server id').default(process.env.DEV_GUILD_ID, 'env DEV_GUILD_ID'))
-		.addOption(new Option('--global', 'Deploy to all bot-joined servers').conflicts('server'))
+		.addOption(new Option('--global', 'Deploy to all bot-joined servers - this will duplicate guild-issued commands! see https://stackoverflow.com/a/70167704/1486966').conflicts(['server', 'reset']))
+		.addOption(new Option('--reset', 'Resets the global and guild commands if you have deployed to both'))
 		.action( async (options) => {
-			if (options.global) {
+			if (options.reset) 
+			{
+				// reset the commands in server and globally; see https://stackoverflow.com/a/70167704/1486966
+				console.log('Resetting commands...');
+				const client = await init_client();
+				console.log('Resetting commands globally (may take ~1 hour to update)...');
+				client.application.commands.set([]);
+				console.log(`Resetting commands in server # ${process.env.DEV_GUILD_ID} (takes effect immediately)...`);
+				const guild = client.guilds.cache.get(process.env.DEV_GUILD_ID);
+				guild.commands.set([]);
+				client.destroy();
+			} 
+			else if (options.global) 
+			{
 				// deploy commands globally
 				console.log('Deploying commands globally');
 				await deploy();
-
-			} else {
+			} 
+			else 
+			{
 				// deploy commands to a single server
 				console.log(`Deploying commands to server id ${options.server}`)
 				await deploy(options.server);
