@@ -12,6 +12,8 @@ const actions = stats.collection('actions');
 // xx monitor record - one row for each node monitored
 // {    user: discord_id, 
 //      node: node_id,
+//      name: node_name,
+//      user_set_name: bool - true if user set the name, false otherwise
 //      status: bool - Online=true, Offline=false, Unknown=null (this is initial status until the poller updates it),
 //      changed: timestamp of last state change,
 // }
@@ -46,7 +48,7 @@ async function log_action(user_id, action, data) {
 }
 
 
-async function add_node(user_id, node_id) {
+async function add_node(user_id, node_id, node_name=null) {
     // Add a node to the monitered node list
     
     // check if user is already monitoring this node
@@ -55,9 +57,15 @@ async function add_node(user_id, node_id) {
     const result = await mainnet.findOne(query, options);
     if (result) {
         // User is already monitoring this node
+        // check if node name is set and the same
+        if (node_name && node_name !== result.name) {
+            // update node name
+            const update = { $set: {name: node_name, user_set_name: true}}
+            return await mainnet.updateOne(query, update);
+        }
         return false;
     } else {
-        const new_doc = {user: user_id, node: node_id, status: status.UNKNOWN, changed: null}
+        const new_doc = {user: user_id, node: node_id, name: node_name, user_set_name: Boolean(node_name), status: status.UNKNOWN, changed: null}
         const result = await mainnet.insertOne(new_doc);
         return result;
     }
@@ -79,6 +87,15 @@ async function update_node_status(node_id, status, changed) {
     }
 }
 
+async function update_node_name(node_id, new_name){
+    // update all nodes with the new name, where user_set_name = false
+
+    const query = {node: node_id, user_set_name: {$ne: true}};
+    const update = { $set: {name: new_name, user_set_name: false}};
+    mainnet.updateMany(query, update);
+
+}
+
 async function list_user_nodes(user_id) {
     // Get list of user's subscriptions
 
@@ -98,4 +115,4 @@ async function delete_node(user_id, node_id) {
 }
 
 
-module.exports = { log_action, add_node, update_node_status, list_user_nodes, delete_node, status, sutats, status_xx }
+module.exports = { log_action, add_node, update_node_status, update_node_name, list_user_nodes, delete_node, status, sutats, status_xx }

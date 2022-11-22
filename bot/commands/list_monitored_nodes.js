@@ -11,7 +11,7 @@ async function build_response(db, user_id, unmonitor_buttons = true) {
 	if (user_nodes.length <= 0) {
 		return {text: `💢 You aren't monitoring any nodes.`, components: []}
 	} 
-	// User is monitoring 1-5 nodes - show buttons <= DISABLED FOR NOW, UNTIL I CAN MANAGE THE UNMONITOR BUTTON BETTER
+	// User is monitoring 1-5 nodes - show buttons
 	else if (user_nodes.length > 0 && user_nodes.length <= 5) {
 		var rows = [];
 	
@@ -22,7 +22,7 @@ async function build_response(db, user_id, unmonitor_buttons = true) {
 					new ButtonBuilder()
 						.setCustomId(`${node.node}-text`)
 						.setDisabled(true)
-						.setLabel(node.node)
+						.setLabel(node.name? `${node.name} - ${node.node}` : node.node)
 						.setStyle(ButtonStyle.Primary),
 				);
 			// node status - disabled
@@ -70,7 +70,7 @@ async function build_response(db, user_id, unmonitor_buttons = true) {
 				status_string = ` _(${db.sutats[node.status]}${since_string})_`
 			}
 			url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
-			reply_string = `${reply_string}\n\`${node.node}\` ${status_string}  [Link to Dashboard](${url})`
+			reply_string = `${reply_string}\n${node.name? `\`${node.name}\` - ` : ''}\`${node.node}\` ${status_string}  [Link to Dashboard](${url})`
 		});
 		
 		return {text: reply_string, components: []}
@@ -93,7 +93,7 @@ module.exports = {
 
 			// button event handling - https://discordjs.guide/interactions/buttons.html#updating-the-button-message
 			const filter = i => i.user.id === user.id;
-			const collector = interaction.channel.createMessageComponentCollector({ filter, time: 15000, dispose: true });
+			const collector = interaction.channel.createMessageComponentCollector({ filter, time: 45000, dispose: true });
 
 			collector.on('collect', async i => {
 				// if button was clicked, delete it from user and update message
