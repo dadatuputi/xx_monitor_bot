@@ -48,27 +48,55 @@ Fill in missing variables in `.env`, such as the Discord Token and App ID. Edit 
 1. Enable `Developer Mode` in the Discord App
 2. Right click on the server and select `Copy ID`
 
-## Step 4: Publish the commands to your server
-
-Run the following command to publish the slash commands to your server as specified in `DEV_GUILD_ID`:
-
-```bash
-$ cd bot
-$ npm install
-$ node deploy-commands.js
-$ [... command output ...]
-$ cd ..
-```
-
-You should see a success message that 3 commands were published.
-
-## Step 5: Build the Docker Image
+## Step 4: Build the Docker Image
 
 Run the following command to build an image from source:
 
 ```bash
 $ docker compose build
 ```
+
+## Step 5: Publish the commands to your server
+
+Use the `bot-utils.js` script to deploy the bot commands to your dev server or globally to all servers. You can either run the script in a container, or locally if you have `node.js` installed. 
+
+### Using `bot-utils.js` in docker
+
+Run this command to view the script options:
+
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js
+```
+
+* #### **Required:** Deploy commands to server
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy
+```
+
+* #### Update username
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js username "xx monitor bot"
+```
+
+* #### Update avatar
+```
+$ docker run --env-file .env --volume <image path>:/image -it xx_monitor_bot-bot node bot-utils.js avatar /image
+```
+
+### Using `bot-utils.js` locally
+
+Use the following commands to install the required packages and publish the slash commands to your server:
+
+```bash
+$ cd bot
+$ npm install
+$ node bot-utils.js help
+$ [... command output ...]
+$ cd ..
+```
+
+You can also set the bot username and status with the `BOT_USERNAME` and `BOT_STATUS` variables in `.env` and they will be set each time the bot starts.
+
 
 ## Step 6: Start the Bot
 
@@ -112,7 +140,7 @@ To run the bot outside docker for testing or development, first start up an ephe
 
 ```bash
 $ cd bot
-$ docker compose -f mongo-only-compose.yml --env-file ../.env up
+$ docker compose -f mongo-only-compose.yml --env-file ../.env up -V
 ```
 
 From another terminal, run:

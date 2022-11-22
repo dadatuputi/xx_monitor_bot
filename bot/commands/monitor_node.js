@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, DiscordAPIError } = require('discord.js');
-const db = require('../db.js')
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -11,7 +10,7 @@ module.exports = {
 				.setRequired(true)
 				.setMaxLength(44)
 				.setMinLength(44)),
-	async execute(interaction) {
+	async execute(interaction, db) {
 		const id = interaction.options.getString('id');
 		const user = interaction.user;
 		var reply_string = `👀 Monitoring \`${id}\`; I will report any node issues`
