@@ -1,5 +1,4 @@
 const { SlashCommandBuilder } = require('discord.js');
-const db = require('../db.js')
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -12,7 +11,7 @@ module.exports = {
 				.setMaxLength(44)
 				.setMinLength(44)
 				.setAutocomplete(true)),
-	async execute(interaction) {
+	async execute(interaction, db) {
 		const id = interaction.options.getString('id');
 		const user = interaction.user;
 		var reply_string = ''
@@ -30,7 +29,7 @@ module.exports = {
 		await interaction.reply({ content: reply_string, ephemeral: true });
 		console.log(`User interaction: ${id}: ${reply_string}`)
 	},
-	async autocomplete(interaction) {
+	async autocomplete(interaction, db) {
 		const user = interaction.user;
 		const focusedValue = interaction.options.getFocused();
 

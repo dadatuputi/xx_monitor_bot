@@ -1,4 +1,5 @@
 const { Events } = require('discord.js');
+const db = require('../db.js')
 
 module.exports = {
 	name: Events.InteractionCreate,
@@ -13,10 +14,10 @@ module.exports = {
 
 		try {
 			if (interaction.isChatInputCommand()) {
-				await command.execute(interaction);
+				await command.execute(interaction, db);
 			}
 			else if (interaction.isAutocomplete()) {
-				await command.autocomplete(interaction);
+				await command.autocomplete(interaction, db);
 			}
 		} catch (error) {
 			console.error(`Error executing ${interaction.commandName}`);

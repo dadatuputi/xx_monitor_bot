@@ -1,9 +1,8 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const db = require('../db.js'); // TODO: don't connect to the db until it's been intentionally done so it doesn't try to connect on deploy-commands.js
 const moment = require('moment');
 const base64url = require('base64url');
 
-async function build_response(user_id, unmonitor_buttons = true) {
+async function build_response(db, user_id, unmonitor_buttons = true) {
 
 	// Get a list of user's monitored nodes
 	const user_nodes = await db.list_user_nodes(user_id)
@@ -82,11 +81,11 @@ module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('list_monitored_nodes')
 		.setDescription('Display a list of validator nodes that you are monitoring'),
-	async execute(interaction) {
+	async execute(interaction, db) {
 		const user = interaction.user;
 		console.log(`User interaction: ${user.id}: listed nodes`)
 
-		var { text, components } = await build_response(user.id);
+		var { text, components } = await build_response(db, user.id);
 
 		// if we have button components, make sure we have the right callback
 		if (components.length) {
@@ -102,7 +101,7 @@ module.exports = {
 				if (num_deleted) {
 					// Deleted node successfully
 					var reply_string = `🗑️ You are no longer monitoring node \`${i.customId}\`.`
-					var { text, components } = await build_response(user.id);
+					var { text, components } = await build_response(db, user.id);
 					await i.update({ content: text, components: components });
 					await interaction.followUp({ content: reply_string, ephemeral: true });
 				}
@@ -110,7 +109,7 @@ module.exports = {
 
 			collector.on('end', async () => {
 				// Disable the unmonitor buttons because we're done listening for them
-				var { text, components } = await build_response(user.id, false);
+				var { text, components } = await build_response(db, user.id, false);
 				await interaction.editReply({ content: text, components: components });
 			});
 

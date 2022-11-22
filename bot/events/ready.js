@@ -12,11 +12,6 @@ module.exports = {
 			client.user.setUsername(process.env.BOT_USERNAME);
 		}
 
-		// Set bot avatar - rate limited, only do this when necessary
-		// if (process.env.BOT_AVATAR) {
-		// 	client.user.setAvatar(process.env.BOT_AVATAR);
-		// }
-
 		// Set bot status
 		if (process.env.BOT_STATUS) {
 			client.user.setActivity(process.env.BOT_STATUS, { type: ActivityType.Listening });
