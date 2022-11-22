@@ -35,10 +35,11 @@ module.exports = {
 
 		// Get list of nodes monitored from db
 		const monitored_nodes = await db.list_user_nodes(user.id)
-		const choices = monitored_nodes.map(entry => entry.node);
-		const filtered = choices.filter(choice => choice.startsWith(focusedValue));
+		const choices = monitored_nodes.map( entry => ({id: entry.node, text: `${entry.name} (${entry.node})`}));
+		const filtered = choices.filter(choice => choice.text.toLowerCase().includes(focusedValue.toLowerCase()));
+
 		await interaction.respond(
-			filtered.map(choice => ({ name: choice, value: choice })),
-		);	
+			filtered.map(choice => ({ name: choice.id, value: choice.id })), // setting name: choice.text should work, but it doesn't. Asked on SO: https://stackoverflow.com/q/74532512/1486966
+		);
 	},
 };

@@ -61,19 +61,26 @@ module.exports = function(client) {
         
         // step through each node result and send its status to the monitoring db
         nodes.forEach( async (xx_node) => {
-            
-            // udpate database with new status
-            var new_status = db.status_xx[xx_node.status]
+
+            var new_name = xx_node.name
+            var status_new = db.status_xx[xx_node.status]
             var node_id = xx_node.id
             var changed = new Date();
-            var result = await db.update_node_status(xx_node.id, new_status, changed)
+            
+            // update database with new name, as appropriate
+            if (xx_node.name) {
+                db.update_node_name(node_id, new_name);
+            }
+
+            // update database with new status
+            var result = await db.update_node_status(xx_node.id, status_new, changed)
 
             // notify users of status change
             if (result) {             
-                console.log(`notifying ${result.length} users of node ${node_id} status change to ${new_status} at ${changed}`)
+                console.log(`notifying ${result.length} users of node ${node_id} status change to ${status_new} at ${changed}`)
                 result.forEach( async (entry) => {
                     // Send a notification to the user
-                    dm_status_change(client, entry.user, node_id, entry.status, new_status)
+                    dm_status_change(client, entry, status_new);
                 });
             }
         });
