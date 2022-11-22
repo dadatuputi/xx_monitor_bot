@@ -73,6 +73,12 @@ $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js
 $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy
 ```
 
+* #### **Optional: ** Deploy commands globally to allow users to interact via DMs
+
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --global
+```
+
 * #### Update username
 ```
 $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js username "xx monitor bot"
