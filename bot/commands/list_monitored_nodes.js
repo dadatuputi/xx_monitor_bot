@@ -16,7 +16,7 @@ function build_response_fancy(db, nodes, unmonitor_buttons = true) {
 					.setStyle(ButtonStyle.Primary),
 			);
 		// node status - disabled
-		button_style = node.status === db.status.UNKNOWN ? ButtonStyle.Secondary : (node.status === db.status.OFFLINE ? ButtonStyle.Danger : ButtonStyle.Success);
+		button_style = node.status === db.status.UNKNOWN ? ButtonStyle.Secondary : (node.status === db.status.ONLINE ? ButtonStyle.Success : ButtonStyle.Danger );
 		row.addComponents(
 			new ButtonBuilder()
 				.setCustomId(`${node.node}-status`)
