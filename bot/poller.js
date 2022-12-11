@@ -15,7 +15,7 @@ request = request.defaults({
     }
 });
 
-console.log("*** API Polling Startred ***")
+console.log("*** API Polling Started ***")
 
 module.exports = function(client) {
 

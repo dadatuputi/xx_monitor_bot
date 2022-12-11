@@ -99,7 +99,7 @@ async function update_node_name(node_id, new_name){
     const update = { $set: {name: new_name, user_set_name: false}};
     mainnet.updateMany(query, update);
 
-}
+}  
 
 async function list_user_nodes(user_id) {
     // Get list of user's subscriptions
@@ -112,11 +112,13 @@ async function list_user_nodes(user_id) {
 
 async function delete_node(user_id, node_id) {
     // Delete the given node from the user record.
-
+    
     const query = {user: user_id, node: node_id};
     const options = {};
-    const result = await mainnet.deleteMany(query, options);
-    return result.deletedCount;
+    const deleted = await mainnet.find(query, options).toArray();
+    var result = await mainnet.deleteMany(query, options);
+    result.deleted = deleted
+    return result;
 }
 
 

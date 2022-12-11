@@ -1,9 +1,12 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const moment = require('moment');
 const base64url = require('base64url');
+const { prettify_node } = require('../utils.js')
+
 
 function build_response_fancy(db, nodes, unmonitor_buttons = true) {
 	var rows = [];
+	const MAX_BUTTON_TEXT_LEN = 80; 		// 80 is value from exception thrown when string is too long
 	
 	nodes.forEach( (node) => {
 		// node id button (disabled, just used to show node id)
@@ -12,11 +15,11 @@ function build_response_fancy(db, nodes, unmonitor_buttons = true) {
 				new ButtonBuilder()
 					.setCustomId(`${node.node}-text`)
 					.setDisabled(true)
-					.setLabel(node.name? `${node.name} - ${node.node}` : node.node)
+					.setLabel(prettify_node(node.name, node.node, MAX_BUTTON_TEXT_LEN, false))
 					.setStyle(ButtonStyle.Primary),
 			);
 		// node status - disabled
-		button_style = node.status === db.status.UNKNOWN ? ButtonStyle.Secondary : (node.status === db.status.ONLINE ? ButtonStyle.Success : ButtonStyle.Danger );
+		const button_style = node.status === db.status.UNKNOWN ? ButtonStyle.Secondary : (node.status === db.status.ONLINE ? ButtonStyle.Success : ButtonStyle.Danger );
 		row.addComponents(
 			new ButtonBuilder()
 				.setCustomId(`${node.node}-status`)
@@ -34,7 +37,7 @@ function build_response_fancy(db, nodes, unmonitor_buttons = true) {
 			);					
 		}
 		// dashboard link
-		url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
+		const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
 		row.addComponents(
 			new ButtonBuilder()
 				.setURL(url)
@@ -96,8 +99,6 @@ module.exports = {
 		const user = interaction.user;
 		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
 
-		console.log(`User interaction: ${user.id}: listed nodes`)
-
 		// if this is in a channel (not dms), use fancy
 		if (interaction.channel) {
 			var { text, components } = await build_response(db, user.id);		// build fancy list
@@ -106,6 +107,8 @@ module.exports = {
 		}
 
 		await interaction.reply({ content: text, components: components, ephemeral: eph, flags: MessageFlags.SuppressEmbeds });
+		console.log(`User ${user.id} interaction from ${interaction.channel ? 'channel' : 'dm' }: listed nodes`);
+
 
 		// if we have button components, make sure we have the right callback
 		if (components.length) {
@@ -116,11 +119,13 @@ module.exports = {
 			const collector = interaction.channel.createMessageComponentCollector({ filter, time: 45000, dispose: true });
 
 			collector.on('collect', async i => {
+
 				// if button was clicked, delete it from user and update message
-				const num_deleted = await db.delete_node(user.id, i.customId)
-				if (num_deleted) {
+				const result = await db.delete_node(user.id, i.customId)
+				if (result.deletedCount) {
+					const deleted = result.deleted[0];
 					// Deleted node successfully
-					var reply_string = `🗑️ You are no longer monitoring node \`${i.customId}\`.`
+					var reply_string = `🗑️ You are no longer monitoring node ${prettify_node(deleted.name, i.customId)}.`
 					var { text, components } = await build_response(db, user.id);
 					await i.update({ content: text, components: components });
 					await interaction.followUp({ content: reply_string, ephemeral: eph });

@@ -1,4 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
+const { prettify_node } = require('../utils.js')
+
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -12,23 +14,24 @@ module.exports = {
 				.setMinLength(44)
 				.setAutocomplete(true)),
 	async execute(interaction, db) {
-		const id = interaction.options.getString('id');
+		const node_id = interaction.options.getString('id');
 		const user = interaction.user;
 		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
 		var reply_string = ''
 
 		// Get list of users subscriptions
-		const num_deleted = await db.delete_node(user.id, id)
-		if (num_deleted) {
+		const result = await db.delete_node(user.id, node_id)
+		if (result.deletedCount) {
+			const deleted = result.deleted[0];
 			// Deleted node successfully
-			reply_string = `🗑️ You are no longer monitoring node \`${id}\`.`
+			reply_string = `🗑️ You are no longer monitoring node ${prettify_node(deleted.name, node_id)}.`
 		} else {
 			// Node wasn't monitored
-			reply_string = `💢 Error: You are not monitoring node \`${id}\`.`
+			reply_string = `💢 Error: You are not monitoring node ${prettify_node(null, node_id)}.`
 		}
 
 		await interaction.reply({ content: reply_string, ephemeral: eph });
-		console.log(`User interaction: ${id}: ${reply_string}`)
+		console.log(`User ${user.id} interaction from ${interaction.channel ? 'channel' : 'dm' }: unmonitor ${node_id}: ${reply_string}`);
 	},
 	async autocomplete(interaction, db) {
 		const user = interaction.user;

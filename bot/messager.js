@@ -1,4 +1,6 @@
+const base64url = require('base64url');
 const db = require('./db.js')
+const { prettify_node } = require('./utils.js')
 
 async function send_dm(client, user_id, message) {
     client.users.fetch(user_id).then( dm => {
@@ -6,10 +8,9 @@ async function send_dm(client, user_id, message) {
     })
 }
 
-async function dm_status_change(client, node, status_new){    
-    var message = (status_new === db.status.ONLINE) ? '🟢': '🔴';                                               // set the status icon by status
-    message += node.name? ` \`${node.name}\` -`: '';                                                             // if node_name is provided, use that first
-    message += ` \`${node.node}\` is ${db.sutats[status_new]} (was ${db.sutats[node.status]})`;                // print new status
+async function dm_status_change(client, node, status_new){
+    var message = (status_new === db.status.ONLINE) ? '🟢': '🔴';                                           // set the status icon by status
+    message += ` ${prettify_node(node.name, node.node)} entered ${db.sutats[status_new]} state`;             // print new status
 
     send_dm(client, node.user, message)
 }
