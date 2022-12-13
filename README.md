@@ -68,23 +68,38 @@ Run this command to view the script options:
 $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js
 ```
 
-* #### **Required:** Deploy commands to server
-```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy
-```
+### **Required:** Deploy commands to server or globally
 
-* #### **Optional: ** Deploy commands globally to allow users to interact via DMs
+You may choose to deploy globally or to a specific server. Deploying globally allows users to interact with the bot over Direct Messages. Don't deploy to both, however, because the commands will appear multiple times in the Discord UI. 
+
+To deploy globally:
 
 ```
 $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --global
 ```
 
-* #### Update username
+To deploy to a server:
+
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy
+```
+
+To un-deploy:
+
+```
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --reset
+```
+
+**To deploy changes you make to the `SlashCommandBuilder` object in your commands**:
+
+Just deploy as you originally did, either globally or to a server.
+
+### Update username
 ```
 $ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js username "xx monitor bot"
 ```
 
-* #### Update avatar
+### Update avatar
 ```
 $ docker run --env-file .env --volume <image path>:/image -it xx_monitor_bot-bot node bot-utils.js avatar /image
 ```
@@ -126,17 +141,17 @@ The slash commands are self-documenting. In your server, start typing `/` and a 
 
 ### Commands
 
-#### `/monitor_node id`
+#### `/monitor_node id name`
 
-Enter this command to monitor a node of the given id. Because node status changes are made over DM, the bot will try to send you a DM. If it is successful, it will start monitoring the node for future status changes.
+Enter this command to monitor a node of the given `id`. Because node status changes are made over DM, the bot will try to send you a DM. If it is successful, it will start monitoring the node for future status changes. `name` is optional. If not set, the bot will try to use the name provided by the API.
 
-#### `/list_monitored_nodes`
+#### `/list_monitored_nodes format`
 
-This command will show a list of nodes that you are monitoring.
+This command will show a list of nodes that you are monitoring. `format` is optional, and is either `Text` (default) or `Buttons`.
 
 #### `/unmonitor_node id`
 
-This command will instruct the bot to stop monitor the given node for you.
+This command will instruct the bot to stop monitor the given node `id` for you.
 
 # Development & Testing
 
@@ -163,4 +178,18 @@ When you are done testing, you can clean up the containers by returning to the `
 
 ```bash
 $ docker compose -f mongo-only-compose.yml -v
+```
+
+## Deploying Updates
+
+To deploy updates, simply pull the changes from git, rebuild the container in docker, bring the new container online, and optionally redeploy the commands (if the `SlashCommandBuilder` object in any of the commands has been updated):
+
+```bash
+$ git pull
+...
+$ docker compose build
+...
+$ docker compose up -d
+...
+$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --global # note! deploy how you originally deployed
 ```
