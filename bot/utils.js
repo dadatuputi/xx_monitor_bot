@@ -18,4 +18,13 @@ function prettify_node(name, id, maxlen = 44, codify = true) {
     return codify? inlineCode(pretty) : pretty;
 }
 
-module.exports = { prettify_node };
+const icons = Object.freeze({
+    WATCH: '👀',
+    ERROR: '💢',
+    SUCCESS: '🙌',
+    DELETE: '🗑️',
+    TRANSIT: '➜',
+    LINK: '🔗'
+});
+
+module.exports = { prettify_node, icons };

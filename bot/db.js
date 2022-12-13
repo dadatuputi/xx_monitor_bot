@@ -14,7 +14,7 @@ const actions = stats.collection('actions');
 //      node: node_id,
 //      name: node_name,
 //      user_set_name: bool - true if user set the name, false otherwise
-//      status: bool - Online=true, Offline=false, Unknown=null (this is initial status until the poller updates it),
+//      status: string - based on status object below,
 //      changed: timestamp of last state change,
 // }
 //
@@ -33,7 +33,14 @@ const status = Object.freeze({
     UNELECTED: 'unelected',
     UNKNOWN: null
 });
-const sutats = Object.freeze(Object.entries(status).reduce((acc, [key, value]) => (acc[value] = key, acc), {}))
+const sutats = Object.freeze(Object.entries(status).reduce((acc, [key, value]) => (acc[value] = key, acc), {})) // reverse of status - get state by string
+const status_icon = Object.freeze({
+    ONLINE: '🟢',
+    OFFLINE: '🔴',
+    ERROR: '⛔',
+    UNELECTED: '⬇️',
+    UNKNOWN: '❓'
+});
 const status_xx = Object.freeze({
     'online': status.ONLINE,
     'offline': status.OFFLINE,
@@ -122,4 +129,4 @@ async function delete_node(user_id, node_id) {
 }
 
 
-module.exports = { log_action, add_node, update_node_status, update_node_name, list_user_nodes, delete_node, status, sutats, status_xx }
+module.exports = { log_action, add_node, update_node_status, update_node_name, list_user_nodes, delete_node, status, sutats, status_icon, status_xx }

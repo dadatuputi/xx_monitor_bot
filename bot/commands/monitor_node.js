@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, DiscordAPIError } = require('discord.js');
 const { UpdateResult } = require('mongodb');
-const { prettify_node } = require('../utils.js')
+const { prettify_node, icons } = require('../utils.js')
 
 
 module.exports = {
@@ -31,10 +31,10 @@ module.exports = {
 
 			if ('modifiedCount' in status) {
 				// result was a record update
-				reply_string = `🙌 Updated \`${node_id}\` name to \`${node_name}\`.`
+				reply_string = `${icons.SUCCESS}  Updated \`${node_id}\` name to \`${node_name}\`.`
 			} else {
 				// result was a new record
-				const monitoring = `👀 Monitoring ${prettify_node(node_name, node_id)}. Reporting changes `
+				const monitoring = `${icons.WATCH}  Monitoring ${prettify_node(node_name, node_id)}. Reporting changes `
 
 				try {
 					// if this interaction is from a channel, verify their dms are open by sending one
@@ -48,7 +48,7 @@ module.exports = {
 						// delete the db entry
 						await db.delete_node(user.id, node_id)
 						
-						reply_string = '💢 Error: I cannot send you a Direct Message. Please resolve that and try again.';
+						reply_string = `${icons.ERROR}  Error: I cannot send you a Direct Message. Please resolve that and try again.`;
 
 					} else 
 						throw err; // this is some other kind of error, pass it on
@@ -59,7 +59,7 @@ module.exports = {
 
 		} else {
 			// User is already monitoring this node
-			reply_string = `💢 Error: You are already monitoring ${prettify_node(node_name, node_id)}.`
+			reply_string = `${icons.ERROR}  Error: You are already monitoring ${prettify_node(node_name, node_id)}.`
 		}
 
 		await interaction.reply({ content: reply_string, ephemeral: eph });

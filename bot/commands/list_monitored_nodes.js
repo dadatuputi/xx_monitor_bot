@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const moment = require('moment');
 const base64url = require('base64url');
-const { prettify_node } = require('../utils.js')
+const { prettify_node, icons } = require('../utils.js')
 
 
-function build_response_fancy(db, nodes, unmonitor_buttons = true) {
+function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 	var rows = [];
 	const MAX_BUTTON_TEXT_LEN = 80; 		// 80 is value from exception thrown when string is too long
 	
@@ -51,18 +51,21 @@ function build_response_fancy(db, nodes, unmonitor_buttons = true) {
 	return rows
 }
 
-function build_response_simple(db, nodes) {
+function build_response_text(db, nodes) {
 	var reply_string = ''
 
 	// Print a list of nodes
 	nodes.forEach((node) => {
-		var status_string = ''
-		if (node.status !== db.status.UNKNOWN) {
-			since_string = node.changed? ` since ${moment(node.changed).fromNow()}`: '';
-			status_string = ` _(${db.sutats[node.status]}${since_string})_`
-		}
-		url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
-		reply_string += `${prettify_node(node.name, node.node)} ${status_string}  [Link to Dashboard](${url})\n`
+		const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
+		const changed = node.changed ? ` since ${moment(node.changed).fromNow()}`: ''
+
+
+		var line = db.status_icon[db.sutats[node.status]]		// node status icon
+		line += `  ${prettify_node(node.name, node.node)}`		// node name & id
+		line += ` _(${db.sutats[node.status]}${changed})_`		// status text & time since change
+		line += `  [${icons.LINK}](${url})`;					// link to dashboard page for node
+		
+		reply_string += line + '\n';
 	});
 	
 	return reply_string;
@@ -75,7 +78,7 @@ async function build_response(db, user_id, fancy = true, unmonitor_buttons = tru
 
 	// User isn't monitoring any nodes
 	if (nodes.length <= 0) {
-		return {text: `💢 You aren't monitoring any nodes.`, components: []}
+		return {text: `${icons.ERROR}  You aren't monitoring any nodes.`, components: []}
 	}
 
 	const reply_string = `You are monitoring ${nodes.length} node${nodes.length > 1? 's': ''}:\n`;
@@ -83,21 +86,21 @@ async function build_response(db, user_id, fancy = true, unmonitor_buttons = tru
 
 	// User is monitoring 1-5 nodes AND the fancy flag is set - show buttons
 	if (nodes.length > 0 && nodes.length <= 5 && fancy) {
-		return {text: reply_string, components: build_response_fancy(db, nodes, unmonitor_buttons)};
+		return {text: reply_string, components: build_response_buttons(db, nodes, unmonitor_buttons)};
 	} 
 	// Build a codeblock if we have results > 5 or fancy flag is unset
 	else {
-		return {text: `${reply_string}${build_response_simple(db, nodes)}`, components: []};
+		return {text: `${reply_string}${build_response_text(db, nodes)}`, components: []};
 	}
 }
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('list_monitored_nodes')
-		.setDescription('Display a list of validator nodes that you are monitoring')
+		.setDescription('Display a list of validators that you are monitoring')
 		.addStringOption(option =>
 			option.setName('format')
-				.setDescription('Choose the format of the node list. Default is Text.')
+				.setDescription('Choose the format of the validator list. Default is Text.')
 				.addChoices(
 					{ name: 'Text', value: 'text' },
 					{ name: 'Buttons', value: 'buttons' },
@@ -127,7 +130,7 @@ module.exports = {
 				if (result.deletedCount) {
 					const deleted = result.deleted[0];
 					// Deleted node successfully
-					var reply_string = `🗑️ You are no longer monitoring node ${prettify_node(deleted.name, i.customId)}.`
+					var reply_string = `${icons.DELETE}  You are no longer monitoring ${prettify_node(deleted.name, i.customId)}.`
 					var { text, components } = await build_response(db, user.id);
 					await i.update({ content: text, components: components });
 					await interaction.followUp({ content: reply_string, ephemeral: eph });

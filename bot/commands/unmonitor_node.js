@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { prettify_node } = require('../utils.js')
+const { prettify_node, icons } = require('../utils.js')
 
 
 module.exports = {
@@ -25,10 +25,10 @@ module.exports = {
 		if (result.deletedCount) {
 			const deleted = result.deleted[0];
 			// Deleted node successfully
-			reply_string = `🗑️ You are no longer monitoring node ${prettify_node(deleted.name, node_id)}.`
+			reply_string = `${icons.DELETE}  You are no longer monitoring ${prettify_node(deleted.name, node_id)}.`
 		} else {
 			// Node wasn't monitored
-			reply_string = `💢 Error: You are not monitoring node ${prettify_node(null, node_id)}.`
+			reply_string = `${icons.ERROR}  Error: You are not monitoring ${prettify_node(null, node_id)}.`
 		}
 
 		await interaction.reply({ content: reply_string, ephemeral: eph });
