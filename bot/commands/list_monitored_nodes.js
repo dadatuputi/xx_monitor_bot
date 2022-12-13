@@ -62,7 +62,7 @@ function build_response_simple(db, nodes) {
 			status_string = ` _(${db.sutats[node.status]}${since_string})_`
 		}
 		url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
-		reply_string += `${node.name? `\`${node.name}\` - ` : ''}\`${node.node}\` ${status_string}  [Link to Dashboard](${url})\n`
+		reply_string += `${prettify_node(node.name, node.node)} ${status_string}  [Link to Dashboard](${url})\n`
 	});
 	
 	return reply_string;
@@ -94,21 +94,23 @@ async function build_response(db, user_id, fancy = true, unmonitor_buttons = tru
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('list_monitored_nodes')
-		.setDescription('Display a list of validator nodes that you are monitoring'),
+		.setDescription('Display a list of validator nodes that you are monitoring')
+		.addStringOption(option =>
+			option.setName('format')
+				.setDescription('Choose the format of the node list. Default is Text.')
+				.addChoices(
+					{ name: 'Text', value: 'text' },
+					{ name: 'Buttons', value: 'buttons' },
+				)),
 	async execute(interaction, db) {
 		const user = interaction.user;
-		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
-
-		// if this is in a channel (not dms), use fancy
-		if (interaction.channel) {
-			var { text, components } = await build_response(db, user.id);		// build fancy list
-		} else {
-			var { text, components } = await build_response(db, user.id, false);		// build simple list
-		}
-
+		const format = interaction.options.getString('format');
+		const fancy = (format == 'buttons') ? true : false;
+		const channel = interaction.channel ? interaction.channel : await interaction.client.channels.fetch(interaction.channelId);
+		const eph = !channel.isDMBased() ? true : false;	// make the message ephemeral / visible only to user if not in dm		
+		
+		var { text, components } = await build_response(db, user.id, fancy);		// build fancy list (if plain not set by user)
 		await interaction.reply({ content: text, components: components, ephemeral: eph, flags: MessageFlags.SuppressEmbeds });
-		console.log(`User ${user.id} interaction from ${interaction.channel ? 'channel' : 'dm' }: listed nodes`);
-
 
 		// if we have button components, make sure we have the right callback
 		if (components.length) {
@@ -116,7 +118,7 @@ module.exports = {
 			// button event handling - https://discordjs.guide/interactions/buttons.html#updating-the-button-message
 
 			const filter = i => i.user.id === user.id;
-			const collector = interaction.channel.createMessageComponentCollector({ filter, time: 45000, dispose: true });
+			const collector = channel.createMessageComponentCollector({ filter, time: 45000, dispose: true });
 
 			collector.on('collect', async i => {
 
@@ -138,5 +140,7 @@ module.exports = {
 				await interaction.editReply({ content: text, components: components });
 			});
 		}
+
+		console.log(`User ${user.id} interaction from ${eph ? 'channel' : 'dm' }: listed nodes`);
 	},
 };

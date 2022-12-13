@@ -20,9 +20,10 @@ module.exports = {
 		const node_id = interaction.options.getString('id');
 		const node_name = interaction.options.getString('name');
 		const user = interaction.user;
-		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
+		const channel = interaction.channel;
+		const eph = !channel.isDMBased() ? true : false;	// make the message ephemeral / visible only to user if not in dm
 		var reply_string = ``
-
+		
 		const status = await db.add_node(user.id, node_id, node_name); // returns false if the user is already monitoring this node/name combination
 		
 		if (status) {
@@ -33,23 +34,27 @@ module.exports = {
 				reply_string = `🙌 Updated \`${node_id}\` name to \`${node_name}\`.`
 			} else {
 				// result was a new record
-				// If this interaction came from a channel, ensure that we can send the user dms by sending them a dm
-				if (interaction.channel) {
-					try {
-						const monitoring = `👀 Monitoring ${prettify_node(node_name, node_id)}. Reporting changes `
+				const monitoring = `👀 Monitoring ${prettify_node(node_name, node_id)}. Reporting changes `
+
+				try {
+					// if this interaction is from a channel, verify their dms are open by sending one
+					if (eph) {
 						await user.send(monitoring + 'here.');
-						reply_string = monitoring + 'in your DMs.';
-					} catch (err) {
-						if (err instanceof DiscordAPIError) {
-							console.log(err);
-							reply_string = '💢 Error: I cannot send you a Direct Message. Please resolve that and try again.';
-							
-							// delete the monitor entry in the db so we don't monitor it until the user sorts out the dm issue
-							await db.delete_node(user.id, node_id)
-						} else 
-							throw err; // this is some other kind of error
 					}
+				} catch (err) {		// when the bot can't send a dm, an exception is thrown
+					if (err instanceof DiscordAPIError) {
+						console.log(err);
+
+						// delete the db entry
+						await db.delete_node(user.id, node_id)
+						
+						reply_string = '💢 Error: I cannot send you a Direct Message. Please resolve that and try again.';
+
+					} else 
+						throw err; // this is some other kind of error, pass it on
 				}
+
+				reply_string = monitoring + (eph ? 'in your DMs.' : 'here');
 			}
 
 		} else {
@@ -58,6 +63,6 @@ module.exports = {
 		}
 
 		await interaction.reply({ content: reply_string, ephemeral: eph });
-		console.log(`User ${user.id} interaction from ${interaction.channel ? 'channel' : 'dm' }: monitor ${node_id}: ${reply_string}`)
+		console.log(`User ${user.id} interaction from ${eph ? 'channel' : 'dm' }: monitor ${node_id}: ${reply_string}`)
 	},
 };

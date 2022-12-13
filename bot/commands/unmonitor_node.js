@@ -16,7 +16,8 @@ module.exports = {
 	async execute(interaction, db) {
 		const node_id = interaction.options.getString('id');
 		const user = interaction.user;
-		const eph = interaction.channel ? true : false;		// set the message to ephemeral if this is in a channel
+		const channel = interaction.channel;
+		const eph = !channel.isDMBased() ? true : false;	// make the message ephemeral / visible only to user if not in dm
 		var reply_string = ''
 
 		// Get list of users subscriptions
@@ -31,7 +32,7 @@ module.exports = {
 		}
 
 		await interaction.reply({ content: reply_string, ephemeral: eph });
-		console.log(`User ${user.id} interaction from ${interaction.channel ? 'channel' : 'dm' }: unmonitor ${node_id}: ${reply_string}`);
+		console.log(`User ${user.id} interaction from ${eph ? 'channel' : 'dm' }: unmonitor ${node_id}: ${reply_string}`);
 	},
 	async autocomplete(interaction, db) {
 		const user = interaction.user;
