@@ -9,16 +9,9 @@ function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 	const MAX_BUTTON_TEXT_LEN = 80; 		// 80 is value from exception thrown when string is too long
 	
 	nodes.forEach( (node) => {
-		// node id button (disabled, just used to show node id)
-		const row = new ActionRowBuilder()
-			.addComponents(
-				new ButtonBuilder()
-					.setCustomId(`${node.node}-text`)
-					.setDisabled(true)
-					.setLabel(prettify_node(node.name, node.node, MAX_BUTTON_TEXT_LEN, false))
-					.setStyle(ButtonStyle.Primary),
-			);
-		// node status - disabled
+		const row = new ActionRowBuilder(); // let's build on this puppy
+
+		// node status - disabled (just used to show node id)
 		const button_style = node.status === db.status.UNKNOWN ? ButtonStyle.Secondary : (node.status === db.status.ONLINE ? ButtonStyle.Success : ButtonStyle.Danger );
 		row.addComponents(
 			new ButtonBuilder()
@@ -27,6 +20,16 @@ function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 				.setLabel(db.sutats[node.status])
 				.setStyle(button_style),
 		);
+
+		// node id button - disabled
+		row.addComponents(
+			new ButtonBuilder()
+				.setCustomId(`${node.node}-text`)
+				.setDisabled(true)
+				.setLabel(prettify_node(node.name, node.node, MAX_BUTTON_TEXT_LEN, false))
+				.setStyle(ButtonStyle.Primary),
+		);
+
 		// unmonitor button
 		if (unmonitor_buttons) {
 			row.addComponents(
@@ -36,6 +39,7 @@ function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 					.setStyle(ButtonStyle.Danger),
 			);					
 		}
+		
 		// dashboard link
 		const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
 		row.addComponents(
