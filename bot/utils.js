@@ -8,7 +8,7 @@ function truncate(s, length=44) {
 }
 
 // take a pretty name and an id and combine; if no name provided, just return id
-function prettify_node(name, id, maxlen = 44, codify = true) {
+function prettify_node(name, id, codify = true, maxlen = 44) {
     if (!name) return codify ? inlineCode(id) : id;     // just return id if no name is given
     const MAX_LEN = maxlen - 3;                         // arbitrary, can be increased
     const MAX_NAME_LEN = Math.ceil(MAX_LEN / 2);        // name shouldn't be much longer than half the max length

@@ -26,7 +26,7 @@ function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 			new ButtonBuilder()
 				.setCustomId(`${node.node}-text`)
 				.setDisabled(true)
-				.setLabel(prettify_node(node.name, node.node, MAX_BUTTON_TEXT_LEN, false))
+				.setLabel(prettify_node(node.name, node.node, false, MAX_BUTTON_TEXT_LEN))
 				.setStyle(ButtonStyle.Primary),
 		);
 
@@ -39,7 +39,7 @@ function build_response_buttons(db, nodes, unmonitor_buttons = true) {
 					.setStyle(ButtonStyle.Danger),
 			);					
 		}
-		
+
 		// dashboard link
 		const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(node.node)}`
 		row.addComponents(

@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { prettify_node, icons } = require('../utils.js')
 
+const ID_LEN = 44;
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -10,8 +11,8 @@ module.exports = {
 			option.setName('id')
 				.setDescription('The Node ID to stop monitoring')
 				.setRequired(true)
-				.setMaxLength(44)
-				.setMinLength(44)
+				.setMaxLength(ID_LEN)
+				.setMinLength(ID_LEN)
 				.setAutocomplete(true)),
 	async execute(interaction, db) {
 		const node_id = interaction.options.getString('id');
@@ -40,7 +41,7 @@ module.exports = {
 
 		// Get list of nodes monitored from db
 		const monitored_nodes = await db.list_user_nodes(user.id)
-		const choices = monitored_nodes.map( entry => ({id: entry.node, text: `${entry.name} (${entry.node})`}));
+		const choices = monitored_nodes.map( entry => ({id: entry.node, text: `${prettify_node(entry.name, entry.node, false, ID_LEN)}`}));
 		const filtered = choices.filter(choice => choice.text.toLowerCase().includes(focusedValue.toLowerCase()));
 
 		await interaction.respond(

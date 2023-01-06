@@ -69,14 +69,21 @@ module.exports = {
 	async autocomplete(interaction, db) {
 		const user = interaction.user;
 		const focusedValue = interaction.options.getFocused();
+		console.log(interaction.options.getFocused(true))
 
 		// Get list of nodes monitored from db
 		const monitored_nodes = await db.list_user_nodes(user.id)
-		const choices = monitored_nodes.map( entry => ({id: entry.node, text: `${entry.name} (${entry.node})`}));
+		const choices = monitored_nodes.map( entry => ({id: entry.node, text: `${prettify_node(entry.name, entry.node, false)}`}));
 		const filtered = choices.filter(choice => choice.text.toLowerCase().includes(focusedValue.toLowerCase()));
 
 		await interaction.respond(
-			filtered.map(choice => ({ name: choice.id, value: choice.id })), // setting name: choice.text should work, but it doesn't. Asked on SO: https://stackoverflow.com/q/74532512/1486966
+			filtered.map(choice => ({ name: choice.text, value: choice.id })), // setting name: choice.text should work, but it doesn't. Asked on SO: https://stackoverflow.com/q/74532512/1486966
+			// [
+			// 	{
+			// 	  name: 'Option 1',
+			// 	  value: 'nSevGly2kTONtmrMIcn8YqWXYmd+6elS5mfKikU0nG4C',
+			// 	},
+			//    ]
 		);
 	},
 };
