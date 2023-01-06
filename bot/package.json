@@ -11,6 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@polkadot/api": "^9.10.5",
+    "@xxnetwork/types": "^1.0.4",
     "async": "^3.2.4",
     "base64url": "^3.0.1",
     "commander": "^9.4.1",
