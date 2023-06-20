@@ -1,3 +1,7 @@
+# Demo
+
+The latest version of this bot is accessible at the [engul.ph discord server](https://discord.gg/Y7jQEbv5za).
+
 # Getting Started
 
 Clone this repo into your linux environment. 
@@ -65,7 +69,7 @@ Use the `bot-utils.js` script to deploy the bot commands to your dev server or g
 Run this command to view the script options:
 
 ```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js
 ```
 
 ### **Required:** Deploy commands to server or globally
@@ -75,19 +79,19 @@ You may choose to deploy globally or to a specific server. Deploying globally al
 To deploy globally:
 
 ```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --global
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js deploy --global
 ```
 
 To deploy to a server:
 
 ```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js deploy
 ```
 
 To un-deploy:
 
 ```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --reset
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js deploy --reset
 ```
 
 **To deploy changes you make to the `SlashCommandBuilder` object in your commands**:
@@ -96,12 +100,12 @@ Just deploy as you originally did, either globally or to a server.
 
 ### Update username
 ```
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js username "xx monitor bot"
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js username "xx monitor bot"
 ```
 
 ### Update avatar
 ```
-$ docker run --env-file .env --volume <image path>:/image -it xx_monitor_bot-bot node bot-utils.js avatar /image
+$ docker run --env-file .env --volume <image path, e.g. ./image.jpg>:/image -it xx_monitor_bot-bot node built/bot-utils.js avatar /image
 ```
 
 ### Using `bot-utils.js` locally
@@ -109,11 +113,9 @@ $ docker run --env-file .env --volume <image path>:/image -it xx_monitor_bot-bot
 Use the following commands to install the required packages and publish the slash commands to your server:
 
 ```bash
-$ cd bot
 $ npm install
-$ node bot-utils.js help
+$ node built/bot-utils.js help
 $ [... command output ...]
-$ cd ..
 ```
 
 You can also set the bot username and status with the `BOT_USERNAME` and `BOT_STATUS` variables in `.env` and they will be set each time the bot starts.
@@ -161,15 +163,14 @@ To run the bot outside docker for testing or development, first start up an ephe
 
 ```bash
 $ cd bot
-$ docker compose -f mongo-only-compose.yml --env-file ../.env up
+$ docker compose -f mongo-only-compose.yml --env-file .env up
 ```
 
 From another terminal, run:
 
 ```bash
-$ cd bot
 $ npm install       # if it hasn't been run before
-$ node index.js
+$ npm run start
 ```
 
 Now you can run the app without building a docker image for each test run.
@@ -191,5 +192,5 @@ $ docker compose build
 ...
 $ docker compose up -d
 ...
-$ docker run --env-file .env -it xx_monitor_bot-bot node bot-utils.js deploy --global # note! deploy how you originally deployed
+$ docker run --env-file .env -it xx_monitor_bot-bot node built/bot-utils.js deploy --global # note! deploy how you originally deployed
 ```
