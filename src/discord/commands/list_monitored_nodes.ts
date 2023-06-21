@@ -64,7 +64,7 @@ function buildResponseButtons(
     }
 
     // dashboard link
-    const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(
+    const url = `${process.env.CMIX_DASH_URL}/${base64url.fromBase64(
       node.node
     )}`;
     row.addComponents(
@@ -85,7 +85,7 @@ function buildResponseText(db: Database, nodes: WithId<Document>[]) {
 
   // Print a list of nodes
   nodes.forEach((node) => {
-    const url = `${process.env.DASHBOARD_URL}/${base64url.fromBase64(
+    const url = `${process.env.CMIX_DASH_URL}/${base64url.fromBase64(
       node.node
     )}`;
     const changed = node.changed

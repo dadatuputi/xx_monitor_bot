@@ -2,33 +2,31 @@ import { CronJob } from "cron";
 import { Database } from "../db/index.js";
 import { dmStatusChange } from "../messager.js";
 import { StatusCmix } from "../db/index.js";
+import cronstrue from "cronstrue";
+
 import type { Client } from "discord.js";
 import type { CmixNode } from "./types.js";
 import type { MonitorRecord } from "../db/types.js";
 
-// Polls the dashboard API and gets the entire list of nodes every ENDPOINT_POLLING seconds
+// Polls the dashboard API and gets the entire list of nodes per the CMIX_CRON schedule
 
-const endpoint: string = process.env.ENDPOINT!;
-const endpoint_retries = process.env.ENDPOINT_RETRIES;
-const cmix_poll_cron: string = process.env.ENDPOINT_CRON!;
-const timezone: string = process.env.TZ!;
-
-export async function startPolling(db: Database, client: Client) {
-  console.log("*** API Polling Started ***");
-
-  new CronJob(
-    cmix_poll_cron,
+export async function startPolling(db: Database, client: Client, api_endpoint: string, cmix_cron: string) {
+  const job = new CronJob(
+    cmix_cron,
     function () {
-      poll(db, client);
+      poll(db, client, api_endpoint);
     },
     null,
     true,
-    timezone
+    'UTC'
   );
+
+  console.log(`*** Cmix Cron Started: ${cronstrue.toString(cmix_cron)} ***`);
+  console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
 }
 
-async function poll(db: Database, client: Client) {
-  const response: Response = await fetch(endpoint, {
+async function poll(db: Database, client: Client, api_endpoint: string) {
+  const response: Response = await fetch(api_endpoint, {
     headers: { accept: "application/json; charset=utf-8" },
   });
   const results = await response.json();
