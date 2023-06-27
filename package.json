@@ -8,7 +8,7 @@
     "start": "node built/index.js",
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "dev-start": "node -r dotenv-expand/config built/index.js dotenv_config_path=./.env dotenv_config_override=true",
+    "dev-start": "MONGO_CONTAINER_NAME=localhost node -r dotenv-expand/config built/index.js dotenv_config_path=./.env",
     "dev": "npm run build && env $(grep NODE_EXTRA_CA_CERTS ./.env | cut -d '#' -f1 | xargs) NODE_ENV=development npm run dev-start"
   },
   "keywords": [],

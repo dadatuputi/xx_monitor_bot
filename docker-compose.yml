@@ -1,10 +1,9 @@
 version: '3.1'
-
+name: xx-monitor-bot
 services:
 
   mongo:
     image: mongo
-    container_name: xx-monitor-bot-mongo
     restart: always
     environment:
       - MONGO_INITDB_ROOT_USERNAME          # Value-less variables are pulled directly from .env
@@ -12,24 +11,11 @@ services:
     volumes:
       - ./mongo/db:/data/db
       - ./mongo/config:/data/configdb
-    command: --port ${MONGO_PORT} --bind_ip 0.0.0.0 --quiet
-
-  mongo-express:
-    image: mongo-express
-    restart: always
-    depends_on: 
-      - mongo
     ports:
-      - 8081:8081
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - ME_CONFIG_MONGODB_URL=${MONGO_URI}
-      - ME_CONFIG_BASICAUTH_USERNAME
-      - ME_CONFIG_BASICAUTH_PASSWORD
+      - ${MONGO_PORT}:27017
+    command: --quiet    
 
   bot:
-    container_name: xx-monitor-bot
     restart: always
     depends_on: 
       - mongo
@@ -45,7 +31,6 @@ services:
     # and restart it with the same options that were used when it was deployed initially
     # https://github.com/containrrr/watchtower
     image: containrrr/watchtower
-    container_name: xx-monitor-bot-watchtower
     restart: always
     depends_on: 
       - bot
