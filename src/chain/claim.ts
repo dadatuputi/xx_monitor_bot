@@ -444,7 +444,7 @@ function notify_stakers(
     if (id === EXTERNAL) return;
     if (process.env.ADMIN_NOTIFY_CHANNEL){
       if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, id, notify_user_message(cfg, claims, true));
-      else sendToChannel(client, ADMIN_NOTIFY_CHANNEL, notify_user_message(cfg, claims, false));
+      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, notify_user_message(cfg, claims, false));
     }
     
   });
