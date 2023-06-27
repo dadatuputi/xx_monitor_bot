@@ -34,7 +34,7 @@ export async function execute(interaction: CommandInteraction, db: Database) {
       await command.autocomplete(interaction, db);
     }
   } catch (error) {
-    console.error(`Error executing ${interaction.commandName}`);
+    console.error(`Error executing bot command "${interaction.commandName}"`);
     console.error(error);
   }
 }

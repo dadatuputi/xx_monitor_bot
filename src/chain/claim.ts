@@ -29,7 +29,6 @@ import type {
 
 const EXTERNAL = 'external';    // string used to identify wallets claimed from web
 
-if (!process.env.ADMIN_NOTIFY_CHANNEL) { throw new Error('Missing ADMIN_NOTIFY_CHANNEL env vars, exiting') }
 const ADMIN_NOTIFY_CHANNEL = process.env.ADMIN_NOTIFY_CHANNEL;
 
 export async function startClaiming(
@@ -443,7 +442,11 @@ function notify_stakers(
     // Send a notification to the user
     // skip if from external
     if (id === EXTERNAL) return;
-    sendToChannel(client, ADMIN_NOTIFY_CHANNEL, notify_user_message(cfg, claims, false));
+    if (process.env.ADMIN_NOTIFY_CHANNEL){
+      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, id, notify_user_message(cfg, claims, true));
+      else sendToChannel(client, ADMIN_NOTIFY_CHANNEL, notify_user_message(cfg, claims, false));
+    }
+    
   });
 }
 
