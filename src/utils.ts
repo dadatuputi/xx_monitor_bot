@@ -13,8 +13,8 @@ function truncate(text: string, length: number = 44): string {
 }
 
 // take a pretty name and an id and combine; if no name provided, just return id
-export function prettifyNode(
-  name: string | null,
+export function prettify_address_alias(
+  name: string | null | undefined,
   id: string,
   codify: boolean = true,
   maxlen: number = 44
@@ -35,6 +35,7 @@ export enum Icons {
   DELETE = "🗑️",
   TRANSIT = "➜",
   LINK = "🔗",
+  WALLET = "💎",
 }
 
 export const XX_ID_LEN = 44;

@@ -12,7 +12,7 @@ import type {
 } from "discord.js";
 import moment from "moment";
 import base64url from "base64url";
-import { prettifyNode, Icons } from "../../utils.js";
+import { prettify_address_alias, Icons } from "../../utils.js";
 import { Database, Status, StatusIcon } from "../../db/index.js";
 import type { DeleteResult, Document, WithId } from "mongodb";
 
@@ -48,7 +48,7 @@ function buildResponseButtons(
         .setCustomId(`${node.node}-text`)
         .setDisabled(true)
         .setLabel(
-          prettifyNode(node.name, node.node, false, MAX_BUTTON_TEXT_LEN)
+          prettify_address_alias(node.name, node.node, false, MAX_BUTTON_TEXT_LEN)
         )
         .setStyle(ButtonStyle.Primary)
     );
@@ -64,9 +64,7 @@ function buildResponseButtons(
     }
 
     // dashboard link
-    const url = `${process.env.CMIX_DASH_URL}/${base64url.fromBase64(
-      node.node
-    )}`;
+    const url = `<${process.env.CMIX_DASH_URL}/${base64url.fromBase64(node.node)}>`;
     row.addComponents(
       new ButtonBuilder()
         .setURL(url)
@@ -96,7 +94,7 @@ function buildResponseText(db: Database, nodes: WithId<Document>[]) {
       : Status.UNKNOWN.toUpperCase(); // edge case for empty string status in the database
 
     let line = StatusIcon[status].toString(); // node status icon
-    line += `  ${prettifyNode(node.name, node.node)}`; // node name & id
+    line += `  ${prettify_address_alias(node.name, node.node)}`; // node name & id
     line += ` _(${status}${changed})_`; // status text & time since change
     line += `  [${Icons.LINK}](${url})`; // link to dashboard page for node
 
@@ -199,7 +197,7 @@ export async function execute(
         // Deleted node successfully
         let reply_string = `${
           Icons.DELETE
-        }  You are no longer monitoring ${prettifyNode(
+        }  You are no longer monitoring ${prettify_address_alias(
           deleted[0].name,
           i.customId
         )}.`;

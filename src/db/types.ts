@@ -1,4 +1,5 @@
 import type { Document, OptionalId } from "mongodb";
+import type { BN } from "@polkadot/util";
 
 export enum Status {
   ONLINE = "online",
@@ -22,6 +23,21 @@ export enum StatusCmix {
   "error" = Status.ERROR,
   "not currently a validator" = Status.UNELECTED,
   "unknown" = Status.UNKNOWN,
+}
+
+export interface RecordUpdate {
+  key: string,
+  old: string,
+  new: string
+}
+
+export interface ClaimRecord extends OptionalId<Document> {
+  user: string; // discord_id
+  wallet: string; // wallet address
+  frequency: string; // how often to claim
+  alias?: string | null; // wallet name
+  last_claim?: Date | null; // timestamp of last claim
+  last_amount?: BN | null; // last claim amount
 }
 
 export interface MonitorRecord extends OptionalId<Document> {

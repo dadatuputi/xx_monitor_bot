@@ -6,11 +6,9 @@ var env = process.env.NODE_ENV || "development";
 console.log(`NODE_ENV: ${env}`);
 console.log(`NODE_EXTRA_CA_CERTS: ${process.env.NODE_EXTRA_CA_CERTS}`);
 
-// If in development, load & expand variables manually
+// If in development, set mongodb uri to localhost
 if (env === "development") {
   console.log(process.env);
-
-  // set mongodb uri to localhost
   process.env.MONGO_URI = `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@localhost:${process.env.MONGO_PORT}/`;
 }
 

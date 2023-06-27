@@ -3,7 +3,7 @@ import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
 } from "discord.js";
-import { prettifyNode, Icons, XX_ID_LEN } from "../../utils.js";
+import { prettify_address_alias, Icons, XX_ID_LEN } from "../../utils.js";
 import type { Database } from "../../db/index.js";
 import type { Document, DeleteResult, WithId } from "mongodb";
 
@@ -39,12 +39,12 @@ export async function execute(
     // Deleted node successfully
     reply_string = `${
       Icons.DELETE
-    }  You are no longer monitoring ${prettifyNode(deleted[0].name, node_id)}.`;
+    }  You are no longer monitoring ${prettify_address_alias(deleted[0].name, node_id)}.`;
   } else {
     // Node wasn't monitored
     reply_string = `${
       Icons.ERROR
-    }  Error: You are not monitoring ${prettifyNode(null, node_id)}.`;
+    }  Error: You are not monitoring ${prettify_address_alias(null, node_id)}.`;
   }
 
   await interaction.reply({ content: reply_string, ephemeral: eph });
@@ -66,7 +66,7 @@ export async function autocomplete(
   const monitored_nodes = await db.listUserNodes(user.id);
   const choices = monitored_nodes.map((entry) => ({
     id: entry.node,
-    text: `${prettifyNode(entry.name, entry.node, false, XX_ID_LEN)}`,
+    text: `${prettify_address_alias(entry.name, entry.node, false, XX_ID_LEN)}`,
   }));
   const filtered = choices.filter((choice) =>
     choice.text.toLowerCase().includes(focusedValue.toLowerCase())

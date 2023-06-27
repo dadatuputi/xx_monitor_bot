@@ -8,29 +8,35 @@ export type ClaimPool = Claim[];
 export interface Claim {
   era: number;
   address: string;
-  claimers?: Map<string, StakerPayout[]>;
+  claimers?: Map<string, StakerPayout[]>;   // all of the claimers for this era, indexed by discord user_id
   fee?: BN;
+}
+
+export enum ClaimFrequency {
+  DAILY = "daily",
+  WEEKLY = "weekly",
+  NOW = "now"
 }
 
 export interface ClaimNotify {
   era: number;
   address: string;
-  alias: string;
   payout: BN;
-  fee?: BN;
   isValidator: boolean;
   validators: ValidatorStakerReward[];
+  alias?: string | null;
+  fee?: BN;
 }
 
-export interface EngulphWallet {
+export interface ExternalWallet {
   wallet: string;
   ip: string;
 }
 
 export interface StakerPayout {
   id: string;
-  alias: string;
   address: string;
+  alias?: string | null;
   rewards?: Map<number, StakerReward>;
   available?: BN;
 }

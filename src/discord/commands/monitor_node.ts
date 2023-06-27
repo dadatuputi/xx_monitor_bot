@@ -3,7 +3,7 @@ import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
 } from "discord.js";
-import { prettifyNode, Icons } from "../../utils.js";
+import { prettify_address_alias, Icons } from "../../utils.js";
 import type { Database } from "../../db/index.js";
 
 export const data = new SlashCommandBuilder()
@@ -45,7 +45,7 @@ export async function execute(
       reply_string = `${Icons.SUCCESS}  Updated \`${node_id}\` name to \`${node_name}\`.`;
     } else {
       // result was a new record
-      const monitoring = `${Icons.WATCH}  Monitoring ${prettifyNode(
+      const monitoring = `${Icons.WATCH}  Monitoring ${prettify_address_alias(
         node_name,
         node_id
       )}. Reporting changes `;
@@ -73,7 +73,7 @@ export async function execute(
     // User is already monitoring this node
     reply_string = `${
       Icons.ERROR
-    }  Error: You are already monitoring ${prettifyNode(node_name, node_id)}.`;
+    }  Error: You are already monitoring ${prettify_address_alias(node_name, node_id)}.`;
   }
 
   await interaction.reply({ content: reply_string, ephemeral: eph });
@@ -95,7 +95,7 @@ export async function autocomplete(
   const monitored_nodes = await db.listUserNodes(user.id);
   const choices = monitored_nodes.map((entry) => ({
     id: entry.node,
-    text: `${prettifyNode(entry.name, entry.node, false)}`,
+    text: `${prettify_address_alias(entry.name, entry.node, false)}`,
   }));
   const filtered = choices.filter((choice) =>
     choice.text.toLowerCase().includes(focusedValue.toLowerCase())
