@@ -1,17 +1,21 @@
-import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
-import type {
-  AutocompleteInteraction,
-  ChatInputCommandInteraction,
-} from "discord.js";
-import { prettify_address_alias, Icons } from "../../utils.js";
-import type { Database } from "../../db/index.js";
-import { isValidAddressXXAddress } from "../../chain/index.js";
 import moment from "moment";
+import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
+import { prettify_address_alias, Icons } from "../../utils.js";
+import { isValidAddressXXAddress } from "../../chain/index.js";
 import { ClaimRecord } from "../../db/types.js";
-import type { Document, DeleteResult, WithId } from "mongodb";
-
 import { claim } from "../../chain/claim.js"
 import { ClaimFrequency } from "../../chain/types.js";
+
+import type { DeleteResult, WithId } from "mongodb";
+import type { Database } from "../../db/index.js";
+import type {  AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+
+// if required env vars aren't provided, throw error
+if ( !process.env.CHAIN_RPC_ENDPOINT 
+  || !process.env.CLAIM_CRON_REGULAR 
+  || !process.env.CLAIM_BATCH 
+  || !process.env.CLAIM_WALLET 
+  || !process.env.CLAIM_PASSWORD ) { throw new Error('Cannot load /claim command: missing chain or claim env vars') }
 
 export const data = new SlashCommandBuilder()
   .setName("claim")
@@ -130,7 +134,7 @@ export async function execute(
 
 
     case "now": {
-      claim(db, interaction.client, process.env.CHAIN_RPC_ENDPOINT!, ClaimFrequency.NOW, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+      claim(db, interaction.client, ClaimFrequency.NOW, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
       reply_string = "trying to claim";
       break;
     }

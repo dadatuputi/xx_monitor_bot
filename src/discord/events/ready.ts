@@ -26,20 +26,20 @@ export function execute(client: DiscordClient, db: Database) {
   }
 
   // start cmix cron
+  // todo - consolidate /monitor commands into single command, then handle command loading like claim i.e. throw error when env vars aren't available. 
   if ( !process.env.CMIX_API_ENDPOINT 
     || !process.env.CMIX_API_CRON ) { throw new Error('Missing XX API env vars, exiting') }
   startPolling(db, client, process.env.CMIX_API_ENDPOINT, process.env.CMIX_API_CRON);
 
-  // start regular claim cron
-  if ( !process.env.CHAIN_RPC_ENDPOINT 
-    || !process.env.CLAIM_CRON_REGULAR 
-    || !process.env.CLAIM_BATCH 
-    || !process.env.CLAIM_WALLET 
-    || !process.env.CLAIM_PASSWORD ) { throw new Error('Missing Chain or Claim env vars, exiting') }
-  startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT, ClaimFrequency.DAILY, process.env.CLAIM_CRON_REGULAR, +process.env.CLAIM_BATCH, process.env.CLAIM_WALLET, process.env.CLAIM_PASSWORD, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
-  
-  // start irregular claim cron if set
-  if (process.env.CLAIM_CRON_IRREGULAR) {
-    startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT, ClaimFrequency.DAILY, process.env.CLAIM_CRON_IRREGULAR, +process.env.CLAIM_BATCH, process.env.CLAIM_WALLET, process.env.CLAIM_PASSWORD, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+  // if /claim command loaded, start claim cron(s)
+  if (client.commands.has('claim')) {
+    // start regular claim cron
+    startClaiming(db, client, ClaimFrequency.DAILY, process.env.CLAIM_CRON_REGULAR!, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+    
+    // start irregular claim cron if set
+    if (process.env.CLAIM_CRON_IRREGULAR) {
+      startClaiming(db, client, ClaimFrequency.WEEKLY, process.env.CLAIM_CRON_IRREGULAR, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+    }
   }
+
 }

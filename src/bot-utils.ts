@@ -54,14 +54,16 @@ async function deploy(guildId?: string) {
 
   // Grab the SlashCommandBuilder#toJSON() output of each command's data for deployment
   for (const file of commandFiles) {
-    const filePath = join(commandsPath, file);
-    const command = await import(filePath);
-    if ("data" in command && "execute" in command) {
-      commands.push(command.data.toJSON());
-    } else {
-      console.log(
-        `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
-      );
+    try { 
+      const filePath = join(commandsPath, file);
+      const command = await import(filePath);
+      if ("data" in command && "execute" in command) {
+        commands.push(command.data.toJSON());
+      } else {
+        throw new Error(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+      }
+    } catch (e) {
+      console.log(e);
     }
   }
 
