@@ -1,14 +1,13 @@
 // built this file with inspiration from https://github.com/w3f/polkadot-k8s-payouts/blob/master/src/actions/start.ts
 
-import custom from "../custom-derives/index.js";
 import "@xxnetwork/types";
-import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 import { BN } from "@polkadot/util";
 import cronstrue from 'cronstrue';
 import { CronJob } from "cron";
 import { sendToChannel, sendToDM } from "../messager.js";
 import { inlineCode } from "discord.js";
 import { Icons, prettify_address_alias } from "../utils.js";
+import { Chain } from "./index.js";
 
 import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
@@ -29,12 +28,13 @@ import type {
 
 const EXTERNAL = 'external';    // string used to identify wallets claimed from web
 
-const ADMIN_NOTIFY_CHANNEL = process.env.ADMIN_NOTIFY_CHANNEL;
+// test that we can connect to the provided endpoint
+const chain_test = new Chain(process.env.CHAIN_RPC_ENDPOINT);
+if (! await chain_test.canConnect()) throw new Error("Can't connect to chain, exiting");
 
 export async function startClaiming(
   db: Database,
   client: Client,
-  rpc_endpoint: string,
   claim_frequency: ClaimFrequency,
   claim_cron: string,
   claim_batch: number,
@@ -47,7 +47,7 @@ export async function startClaiming(
   const job = new CronJob(
     claim_cron,
     function () {
-      claim(db, client, rpc_endpoint, claim_frequency, claim_batch, claim_wallet, claim_pw, claimer_endpoint, claimer_key);
+      claim(db, client, claim_frequency, claim_batch, claim_wallet, claim_pw, claimer_endpoint, claimer_key);
     },
     null,
     true,
@@ -61,7 +61,6 @@ export async function startClaiming(
 export async function claim(
   db: Database,
   client: Client,
-  rpc_endpoint: string,
   claim_frequency: ClaimFrequency,
   claim_batch: number,
   claim_wallet: string,
@@ -75,8 +74,9 @@ export async function claim(
   // if a claimer endpoint and key are set, grab claimers from that endpoint
   if (claimer_endpoint && claimer_key) claimers.push(...await fetch_claimers(claimer_endpoint, claimer_key));
 
-  const provider = new WsProvider(rpc_endpoint);
-  const api = await ApiPromise.create({ derives: custom, provider });
+  // use provider created at module import
+  const chain = new Chain(process.env.CHAIN_RPC_ENDPOINT);
+  const api = await chain.connect();
   const era = (await api.query.staking.activeEra()).toJSON() as unknown as Era;
 
   // get current price
@@ -120,19 +120,10 @@ export async function claim(
     },
   };
 
-  const [chain, nodeName, nodeVersion] = await Promise.all([
-    api.rpc.system.chain(),
-    api.rpc.system.name(),
-    api.rpc.system.version(),
-  ]);
-
-  console.log(
-    `You are connected to chain ${chain} using ${nodeName} v${nodeVersion}`
-  );
 
   const claimers_with_rewards = await get_available_rewards(cfg, claimers);                         // query the chain to populate claimers with available rewards 
   const claim_pool = build_claim_pool(claimers_with_rewards);                                       // prepare a list of claims to submit with unique era/address combinations
-  const keyPair = init_key(cfg.claim_wallet, cfg.claim_pw);                                         // initialize the claim wallet
+  const keyPair = Chain.init_key(cfg.claim_wallet, cfg.claim_pw);                                   // initialize the claim wallet
   const [claims_fulfilled, claims_failed] = await submit_claim(cfg, keyPair, claim_pool, false);    // submit payout transactions
   console.log("Notifying stakers")
   notify_stakers(cfg, client, claims_fulfilled, claims_failed)
@@ -141,7 +132,6 @@ export async function claim(
 
   return;
 }
-
 
 async function fetch_claimers(endpoint: string, key: string): Promise<Array<StakerPayout>> {
   let claimers: StakerPayout[] = new Array<StakerPayout>();
@@ -165,7 +155,6 @@ async function fetch_claimers(endpoint: string, key: string): Promise<Array<Stak
 
   return claimers as Array<StakerPayout>;
 }
-
 
 function convert_staker_rewards(
   rewards: DeriveStakerReward[]
@@ -448,22 +437,6 @@ function notify_stakers(
     }
     
   });
-}
-
-function init_key(key: KeyringPair$Json, password: string): KeyringPair {
-  const keyring = new Keyring({ type: "sr25519" });
-  const key_pair = keyring.addFromJson(key);
-  key_pair.decodePkcs8(password);
-
-  console.log(
-    `key init: read account with address: ${keyring.pairs[0].toJson().address}`
-  );
-  console.log(`key init: is locked: ${key_pair.isLocked}`);
-
-  if (key_pair.isLocked) {
-    console.log(`problem unlocking the wallet, exiting ...`);
-    process.exit(1);
-  } else return key_pair;
 }
 
 function build_claim_pool(claimers: StakerPayout[]): Claim[] {

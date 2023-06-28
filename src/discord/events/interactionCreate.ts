@@ -11,7 +11,7 @@ export async function execute(interaction: CommandInteraction, db: Database) {
   );
 
   if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
+    console.error(`No bot command matching /${interaction.commandName} was found.`);
     return;
   }
 
@@ -34,7 +34,7 @@ export async function execute(interaction: CommandInteraction, db: Database) {
       await command.autocomplete(interaction, db);
     }
   } catch (error) {
-    console.error(`Error executing bot command "${interaction.commandName}"`);
+    console.error(`Error executing bot command /${interaction.commandName}`);
     console.error(error);
   }
 }
