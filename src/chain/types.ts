@@ -1,7 +1,9 @@
+import { Icons } from "../utils.js";
+
 import type { ApiPromise } from "@polkadot/api";
 import type { BN } from "@polkadot/util";
 import type { Balance, EraIndex } from "@polkadot/types/interfaces";
-import type { KeyringPair$Json } from "@polkadot/keyring/types";
+import type { KeyringPair } from "@polkadot/keyring/types";
 
 export type ClaimPool = Claim[];
 
@@ -63,8 +65,8 @@ export interface Config {
   era: number;
   eras_historic: EraIndex[];
   batch_size: number;
-  claim_wallet: KeyringPair$Json;
-  claim_pw: string;
+  claim_key: KeyringPair;
+  claim_key_bal(): Promise<BN>;
   price: number;
   xx_usd(xx: BN): string;
   xx_bal(xx: BN): string;
@@ -76,3 +78,5 @@ export interface Reward {
   isEmpty: boolean;
   isValidator: boolean;
 }
+
+export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.NOMINATOR}=nominator, ${Icons.VALIDATOR}=validator`;

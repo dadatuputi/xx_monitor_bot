@@ -8,6 +8,7 @@ import { sendToChannel, sendToDM } from "../messager.js";
 import { inlineCode } from "discord.js";
 import { Icons, prettify_address_alias } from "../utils.js";
 import { Chain } from "./index.js";
+import { ClaimLegend } from "./types.js";
 
 import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
@@ -108,8 +109,11 @@ export async function claim(
     era: era.index,
     eras_historic: eras_historic,
     batch_size: claim_batch,
-    claim_wallet: JSON.parse(claim_wallet) as KeyringPair$Json,
-    claim_pw: claim_pw,
+    claim_key: Chain.init_key(JSON.parse(claim_wallet) as KeyringPair$Json, claim_pw),
+    async claim_key_bal(): Promise<BN> {
+      const { data:balance } = await api.query.system.account(this.claim_key.address)
+      return balance.free
+    },
     price: price,
     xx_usd(xx: BN): string {
       const usd: number = (xx.toNumber() * price) / 1000000000;
@@ -123,10 +127,9 @@ export async function claim(
 
   const claimers_with_rewards = await get_available_rewards(cfg, claimers);                         // query the chain to populate claimers with available rewards 
   const claim_pool = build_claim_pool(claimers_with_rewards);                                       // prepare a list of claims to submit with unique era/address combinations
-  const keyPair = Chain.init_key(cfg.claim_wallet, cfg.claim_pw);                                   // initialize the claim wallet
-  const [claims_fulfilled, claims_failed] = await submit_claim(cfg, keyPair, claim_pool, false);    // submit payout transactions
+  const [claims_fulfilled, claims_failed] = await submit_claim(cfg, cfg.claim_key, claim_pool, false);    // submit payout transactions
   console.log("Notifying stakers")
-  notify_stakers(cfg, client, claims_fulfilled, claims_failed)
+  await notify_stakers(cfg, client, claims_fulfilled, claims_failed)
 
   api.disconnect();
 
@@ -381,14 +384,14 @@ function create_notify_map(claims: ClaimPool): Map<string, Map<string, ClaimNoti
   return notify_map;
 }
 
-function notify_user_message(cfg: Config, claims: Map<string, ClaimNotify[]>, success: boolean = true) : string[] {
+async function notify_user_message(cfg: Config, claims: Map<string, ClaimNotify[]>, success: boolean = true) : Promise<string[]> {
+  const retrows = new Array<string>();
+
   const _era_len = [ ...claims.values() ].reduce( (acc, val) => Math.max(acc, val.length), -Infinity); // gets the longest length of eras from claims
   // header is always the same
   const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
-  const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
-  const _total_string = `${cfg.xx_bal(_total)}/${cfg.xx_usd(_total)} (tx ${cfg.xx_bal(_total_fee)})`;
-  const _header = `${success ? `Claimed rewards ${_total_string}` : 'Failed to claim rewards'} for ${_era_len} era${_era_len === 1 ? "" : "s"} / ${claims.size} wallet${claims.size === 1 ? "" : "s"}:`;
-  const _rows = new Array<string>();
+  const _total_string = `${cfg.xx_bal(_total)}/${cfg.xx_usd(_total)}`;
+  retrows.push(`${success ? `Claimed rewards ${_total_string}` : 'Failed to claim rewards'} for ${_era_len} era${_era_len === 1 ? "" : "s"} / ${claims.size} wallet${claims.size === 1 ? "" : "s"}:`)
 
   // msg format
   // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
@@ -396,47 +399,55 @@ function notify_user_message(cfg: Config, claims: Map<string, ClaimNotify[]>, su
   //         Era xxx: xx/$ as validator|nominator of xxxxx
   claims.forEach( (value, wallet) => {
     // build the top wallet string: alias / xxxxxx:
-    _rows.push(inlineCode(`\t${Icons.WALLET} ${prettify_address_alias(value[0].alias, wallet, false, 48)}:`));
+    retrows.push(inlineCode(`${Icons.WALLET} ${prettify_address_alias(value[0].alias, wallet, false, 40)}:`));
 
     value.forEach( (claim) => {
       // build the era line: Era xxx: xx
       const _nominator_validators = claim.validators.map(({ address }) => address) as string[];
-      const _nominator_string = claim.isValidator ? "" : `nominator of ${_nominator_validators.join(", ")}`;
-      const _val_nom_info = `as ${claim.isValidator ? "validator" : _nominator_string}`
-      _rows.push(inlineCode(`\t\tEra ${claim.era}: ${cfg.xx_bal(claim.payout)}/${cfg.xx_usd(claim.payout)} ${_val_nom_info}`));
+      const _nominator_string = claim.isValidator ? "" : `${Icons.NOMINATOR} of ${Icons.VALIDATOR} ${_nominator_validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
+      const _val_nom_info = `as ${claim.isValidator ? Icons.VALIDATOR : _nominator_string}`
+      retrows.push(inlineCode(`\tEra ${claim.era}: ${cfg.xx_bal(claim.payout)}/${cfg.xx_usd(claim.payout)} ${_val_nom_info}`));
     });
 
   })
 
-  return [_header, ..._rows];
+  const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
+  retrows.push(inlineCode(' '));
+  retrows.push(inlineCode( `Claim ${Icons.WALLET}: ${cfg.claim_key.address}`));
+  retrows.push(inlineCode(`\tThis claim used ${cfg.xx_bal(_total_fee)}, ${cfg.xx_bal(await cfg.claim_key_bal())} remaining`))
+  retrows.push(inlineCode(`\tTo support this claim feature, consider a donation to the claim wallet above.`))
+
+  retrows.push(inlineCode(' '));
+  retrows.push(inlineCode(ClaimLegend));
+
+  return retrows;
 }
 
-function notify_stakers(
+async function notify_stakers(
   cfg: Config,
   client: Client,
   claims_fulfilled: ClaimPool,
   claims_failed: ClaimPool
-): void {
+): Promise<void> {
   const notify_success : Map<string, Map<string, ClaimNotify[]>> = create_notify_map(claims_fulfilled);
   const notify_failed : Map<string, Map<string, ClaimNotify[]>> = create_notify_map(claims_failed);
 
-  notify_success.forEach((claims, id) => {
+  for(const [id, claims] of notify_success){
     // Send a notification to the user
     // skip if from external
     if (id === EXTERNAL) return;
-    sendToDM(client, id, notify_user_message(cfg, claims, true));
-  });
+    sendToDM(client, id, await notify_user_message(cfg, claims, true));
+  }
 
-  notify_failed.forEach((claims, id) => {
+  for(const [id, claims] of notify_failed){
     // Send a notification to the user
     // skip if from external
     if (id === EXTERNAL) return;
     if (process.env.ADMIN_NOTIFY_CHANNEL){
-      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, id, notify_user_message(cfg, claims, true));
-      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, notify_user_message(cfg, claims, false));
+      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, id, await notify_user_message(cfg, claims, true));
+      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, await notify_user_message(cfg, claims, false));
     }
-    
-  });
+  }
 }
 
 function build_claim_pool(claimers: StakerPayout[]): Claim[] {
