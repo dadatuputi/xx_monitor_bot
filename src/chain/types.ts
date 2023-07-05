@@ -1,18 +1,11 @@
 import { Icons } from "../utils.js";
+import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 
-import type { ApiPromise } from "@polkadot/api";
 import type { BN } from "@polkadot/util";
-import type { Balance, EraIndex } from "@polkadot/types/interfaces";
 import type { KeyringPair } from "@polkadot/keyring/types";
-
-export type ClaimPool = Claim[];
-
-export interface Claim {
-  era: number;
-  address: string;
-  claimers?: Map<string, StakerPayout[]>;   // all of the claimers for this era, indexed by discord user_id
-  fee?: BN;
-}
+import type { Database } from "../db/index.js";
+import type { Client } from "discord.js";
+import type { Chain } from "./index.js";
 
 export enum ClaimFrequency {
   DAILY = "daily",
@@ -20,63 +13,60 @@ export enum ClaimFrequency {
   NOW = "now"
 }
 
-export interface ClaimNotify {
-  era: number;
-  address: string;
-  payout: BN;
-  isValidator: boolean;
-  validators: ValidatorStakerReward[];
-  alias?: string | null;
-  fee?: BN;
-}
-
-export interface ExternalWallet {
+export interface ExternalStaker {
+  // records from external staker source
   wallet: string;
   ip: string;
 }
 
-export interface StakerPayout {
-  id: string;
-  address: string;
+export interface Staker {
+  // used to manage user-staker claim subscriptions
+  user_id: string;
+  wallet: string;
   alias?: string | null;
-  rewards?: Map<number, StakerReward>;
-  available?: BN;
 }
 
-export interface StakerReward {
-  isValidator: boolean;
-  validators: ValidatorStakerReward[];
+export interface StakerRewards extends Staker {
+  // associates available rewards for a staker
+  rewards: DeriveStakerReward[];
+}
+
+export interface StakerRewardsAvailable extends StakerRewards {
+  // total available tokens for staker
   available: BN;
 }
 
-export interface ValidatorStakerReward {
-  address: string;
-  total: Balance;
-  value: Balance;
-}
-
-export interface Era {
-  index: number;
-  start: number;
-}
-
-export interface Config {
-  api: ApiPromise;
+export interface EraClaim {
+  // Used for executing the claim
   era: number;
-  eras_historic: EraIndex[];
-  batch_size: number;
-  claim_key: KeyringPair;
-  claim_key_bal(): Promise<BN>;
-  price: number;
-  xx_usd(xx: BN): string;
-  xx_bal(xx: BN): string;
+  validator: string;
+  notify: StakerRewardsAvailable[];   // all of the claimers for this era/validator, indexed by user_id and wallet
+  fee?: BN;
 }
 
-export interface Reward {
-  era: BN;
-  eraReward: BN;
-  isEmpty: boolean;
+export interface StakerNotify extends Staker {
+  // everything needed to notify a user of claims made on their behalf
+  era: number;
+  payout: BN;
   isValidator: boolean;
+  validators: string[];
+  fee?: BN;
+}
+
+export interface ClaimConfig {
+  db: Database,
+  client: Client,
+  xx: Chain;
+  claim_frequency: ClaimFrequency,
+  batch_size: number,
+  claim_wallet: KeyringPair,
+  external_stakers?: ExternalStakerConfig
+}
+
+export interface ExternalStakerConfig {
+  fn: Function,
+  identifier: string,
+  args: {[key: string]: any}
 }
 
 export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.NOMINATOR}=nominator, ${Icons.VALIDATOR}=validator`;

@@ -1,10 +1,11 @@
 import { Events, ActivityType } from "discord.js";
 import { startPolling } from "../../cmix/index.js";
 import { startClaiming } from '../../chain/claim.js';
-import { ClaimFrequency } from "../../chain/types.js";
+import { ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
 
 import type { Database } from "../../db/index.js";
 import type { DiscordClient } from "../types.js";
+import { EXTERNAL, engulph_fetch_claimers } from "../../utils.js";
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -33,12 +34,19 @@ export function execute(client: DiscordClient, db: Database) {
 
   // if /claim command loaded, start claim cron(s)
   if (client.commands.has('claim')) {
+
+    const external_stakers: ExternalStakerConfig = {
+      fn: engulph_fetch_claimers,
+      identifier: EXTERNAL,
+      args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
+    }
+
     // start regular claim cron
-    startClaiming(db, client, ClaimFrequency.DAILY, process.env.CLAIM_CRON_REGULAR!, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+    startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT!, ClaimFrequency.DAILY, process.env.CLAIM_CRON_REGULAR!, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, external_stakers);
     
     // start irregular claim cron if set
     if (process.env.CLAIM_CRON_IRREGULAR) {
-      startClaiming(db, client, ClaimFrequency.WEEKLY, process.env.CLAIM_CRON_IRREGULAR, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
+      startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT!, ClaimFrequency.WEEKLY, process.env.CLAIM_CRON_IRREGULAR, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, external_stakers);
     }
   }
 

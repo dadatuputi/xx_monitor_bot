@@ -3,17 +3,18 @@ import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { hexToU8a, isHex } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 
-import type { ApiOptions } from "@polkadot/api/types/index.js";
-import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
+import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
+import type { BN } from "@polkadot/util";
+import { Era } from "@polkadot/types/interfaces/types.js";
 
-const xxnetworkprefix = 55;
+const XX_SS58_PREFIX = 55;
 
 export function isValidAddressXXAddress(address: string) : boolean {
   try {
     encodeAddress(
       isHex(address)
         ? hexToU8a(address)
-        : decodeAddress(address, false, xxnetworkprefix)
+        : decodeAddress(address, false, XX_SS58_PREFIX)
     );
 
     return true;
@@ -22,60 +23,96 @@ export function isValidAddressXXAddress(address: string) : boolean {
   }
 };
 
+
 export class Chain{
-  private api_options: ApiOptions;
+  public endpoint: string;
+  public api!: ApiPromise;
   
-  constructor(endpoint: string | undefined) {
-    // test that we can connect to the provided endpoint
-    const provider = new WsProvider(endpoint);
-    this.api_options = { 
-      derives: custom, 
-      provider,
-      throwOnConnect: true,
-    }
+  constructor(endpoint: string) {
+    this.endpoint = endpoint;
   }
 
-  public async connect(): Promise<ApiPromise> {
-    const api = await ApiPromise.create(this.api_options);
-    const [chain, nodeName, nodeVersion] = await Promise.all([
+  public async connect(): Promise<void> {
+    const provider = new WsProvider(this.endpoint);
+    const options = {
+      derives: custom, 
+      provider: provider,
+      throwOnConnect: true,
+    }    
+    const api = await ApiPromise.create(options);
+    const [chain, nodeName, nodeVersion, era] = await Promise.all([
       api.rpc.system.chain(),
       api.rpc.system.name(),
       api.rpc.system.version(),
+      api.query.staking.activeEra()
     ]);
   
-    console.log(
-      `You are connected to chain ${chain} using ${nodeName} v${nodeVersion}`
-    );
+    console.log(`Connected to chain ${chain} using ${nodeName} v${nodeVersion}, era: ${(era.toJSON() as unknown as Era).index}`);
     
-    return api;
+    this.api = api;
+  }
+  
+  public static async create(endpoint: string) {
+    const me = new Chain(endpoint);
+    await me.connect();
+    return me;
   }
 
-  public async canConnect(): Promise<boolean> {
+  public static async test(endpoint: string): Promise<boolean> {
     try {
-      console.log(`Testing rpc connection to ${process.env.CHAIN_RPC_ENDPOINT}...`)
-      const api = await ApiPromise.create(this.api_options);
+      console.log(`Testing rpc connection to ${endpoint}...`)
+      const me = await Chain.create(endpoint);
       console.log(`Connection successful`)
-      await api.disconnect()
+      await me.api!.disconnect()
     } catch (e) {
-      console.log(`Could not connect to endpoint ${process.env.CHAIN_RPC_ENDPOINT}: ${e}`)
+      console.log(`Could not connect to endpoint ${endpoint}: ${e}`)
       return false;
     }
     return true;
   }
 
+  public async wallet_balance(wallet: string | KeyringPair): Promise<BN> {
+    let address: string;
+    if (typeof wallet !== 'string') address = wallet.address;
+    else address = wallet;
+
+    const { data: balance } = await this.api.query.system.account(address)
+    return balance.free
+  }
+
+  public xx_bal_string(xx: BN): string {
+    return this.api.registry.createType("Balance", xx).toHuman();
+  }
+
+  public xx_bal_usd_string(xx: BN, price: number | undefined): string {
+    return `${this.xx_bal_string(xx)}${price ? ` (${Chain.xx_to_usd(xx, price)})` : ''}`
+  }
+
+  public static xx_to_usd(xx: BN, price: number): string {
+    const usd: number = (xx.toNumber() * price) / 1000000000;
+    const usd_formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+    return usd_formatter.format(usd);
+  }
+
   public static init_key(key: KeyringPair$Json, password: string): KeyringPair {
-    const keyring = new Keyring({ type: "sr25519" });
+    const keyring_options: KeyringOptions = {
+      ss58Format: XX_SS58_PREFIX,
+      type: "sr25519"
+    }
+    const keyring = new Keyring(keyring_options);
     const key_pair = keyring.addFromJson(key);
     key_pair.decodePkcs8(password);
   
-    console.log(
-      `key init: read account with address: ${keyring.pairs[0].toJson().address}`
-    );
-    console.log(`key init: is locked: ${key_pair.isLocked}`);
-  
+    // console.log(`key init: read account with address: ${keyring.pairs[0].toJson().address}`);
+      
     if (key_pair.isLocked) {
-      console.log(`problem unlocking the wallet, exiting ...`);
-      process.exit(1);
-    } else return key_pair;
+      throw new Error(`Could not unlock the wallet: ${keyring.pairs[0].toJson().address}`);
+    } 
+    
+    return key_pair;
   }
+
 };

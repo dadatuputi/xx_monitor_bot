@@ -14,7 +14,7 @@ import type {
 import type { ClaimRecord, LogActionRecord, MonitorRecord, RecordUpdate } from "./types.js";
 import { Status } from "./types.js";
 import { MongoClient } from "mongodb";
-import { Claim, ClaimFrequency, StakerPayout } from "../chain/types.js";
+import { ClaimFrequency, Staker } from "../chain/types.js";
 
 export { Status, StatusIcon, StatusCmix } from "./types.js";
 
@@ -306,7 +306,7 @@ export class Database {
     return [result, deleted];
   }
 
-  public async getClaimers(claim_frequency: ClaimFrequency): Promise<StakerPayout[]> {
+  public async getClaimers(claim_frequency: ClaimFrequency): Promise<Staker[]> {
     // Get all claimers for a certain frequency
 
     const query: Filter<ClaimRecord> = claim_frequency !== ClaimFrequency.NOW ? {
@@ -318,9 +318,9 @@ export class Database {
       },
     };
     const db_claimers = await this.claims.find(query, options).toArray();
-    return db_claimers.map<StakerPayout>( (value): StakerPayout => ({ 
-      id: value.user,
-      address: value.wallet,
+    return db_claimers.map<Staker>( (value): Staker => ({ 
+      user_id: value.user,
+      wallet: value.wallet,
       alias: value.alias
     }));
   }

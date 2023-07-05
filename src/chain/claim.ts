@@ -6,49 +6,57 @@ import cronstrue from 'cronstrue';
 import { CronJob } from "cron";
 import { sendToChannel, sendToDM } from "../messager.js";
 import { inlineCode } from "discord.js";
-import { Icons, prettify_address_alias } from "../utils.js";
+import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize } from "../utils.js";
 import { Chain } from "./index.js";
 import { ClaimLegend } from "./types.js";
 
-import type { DeriveStakerReward } from "@polkadot/api-derive/types";
-import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
+import type { KeyringPair$Json } from "@polkadot/keyring/types";
 import type { Database } from "../db/index.js";
 import type { Client } from "discord.js";
 import type {
-  ExternalWallet,
-  StakerPayout,
-  Era,
-  Config,
-  Claim,
-  ClaimPool,
-  StakerReward,
-  ValidatorStakerReward,
-  ClaimNotify,
   ClaimFrequency,
+  Staker,
+  StakerRewards,
+  StakerRewardsAvailable,
+  EraClaim,
+  StakerNotify,
+  ClaimConfig,
+  ExternalStakerConfig,
 } from "./types.js";
 
-const EXTERNAL = 'external';    // string used to identify wallets claimed from web
+// env guard
+import '../env-guard/claim.js'
 
 // test that we can connect to the provided endpoint
-const chain_test = new Chain(process.env.CHAIN_RPC_ENDPOINT);
-if (! await chain_test.canConnect()) throw new Error("Can't connect to chain, exiting");
+if (! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
 
 export async function startClaiming(
   db: Database,
   client: Client,
+  chain_rpc: string,
   claim_frequency: ClaimFrequency,
   claim_cron: string,
   claim_batch: number,
   claim_wallet: string,
   claim_pw: string,
-  claimer_endpoint?: string,
-  claimer_key?: string
+  external_stakers?: ExternalStakerConfig
 ): Promise<void> {
-
   const job = new CronJob(
     claim_cron,
-    function () {
-      claim(db, client, claim_frequency, claim_batch, claim_wallet, claim_pw, claimer_endpoint, claimer_key);
+    async function () {
+      const cfg: ClaimConfig = {
+        db: db,
+        client: client,
+        xx: await Chain.create(chain_rpc),
+        claim_frequency: claim_frequency,
+        batch_size: claim_batch,
+        claim_wallet: Chain.init_key(JSON.parse(claim_wallet) as KeyringPair$Json, claim_pw),
+        external_stakers: external_stakers
+      }
+      const claim = await Claim.create(cfg);
+      await claim.prepare();
+      await claim.submit();
+      await cfg.xx.api.disconnect();
     },
     null,
     true,
@@ -59,435 +67,291 @@ export async function startClaiming(
   console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
 }
 
-export async function claim(
-  db: Database,
-  client: Client,
-  claim_frequency: ClaimFrequency,
-  claim_batch: number,
-  claim_wallet: string,
-  claim_pw: string,
-  claimer_endpoint?: string,
-  claimer_key?: string
-): Promise<void> {
-  // get claimers from mongodb
-  const claimers: StakerPayout[] = await db.getClaimers(claim_frequency);
-  
-  // if a claimer endpoint and key are set, grab claimers from that endpoint
-  if (claimer_endpoint && claimer_key) claimers.push(...await fetch_claimers(claimer_endpoint, claimer_key));
+export class Claim {
+  private cfg: ClaimConfig;
+  private stakers: StakerRewardsAvailable[] = []
+  private price: number | undefined;
+  private era_claims: EraClaim[] = [];
+  private is_prepared: boolean = false;
 
-  // use provider created at module import
-  const chain = new Chain(process.env.CHAIN_RPC_ENDPOINT);
-  const api = await chain.connect();
-  const era = (await api.query.staking.activeEra()).toJSON() as unknown as Era;
-
-  // get current price
-  const params = new URLSearchParams({
-    ids: "xxcoin",
-    vs_currencies: "usd",
-  });
-  const headers = new Headers({
-    accept: "application/json",
-  });
-  const price: number = (
-    await (
-      await fetch(`https://api.coingecko.com/api/v3/simple/price?${params}`, {
-        headers,
-      })
-    ).json()
-  ).xxcoin.usd;
-  const usd_formatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-  console.log(`Current price of xx is ${price}`);
-
-  // array of available eras - last 84
-  const eras_historic = await api.derive.staking.erasHistoric();
-
-  const cfg: Config = {
-    api: api,
-    era: era.index,
-    eras_historic: eras_historic,
-    batch_size: claim_batch,
-    claim_key: Chain.init_key(JSON.parse(claim_wallet) as KeyringPair$Json, claim_pw),
-    async claim_key_bal(): Promise<BN> {
-      const { data:balance } = await api.query.system.account(this.claim_key.address)
-      return balance.free
-    },
-    price: price,
-    xx_usd(xx: BN): string {
-      const usd: number = (xx.toNumber() * price) / 1000000000;
-      return usd_formatter.format(usd);
-    },
-    xx_bal(xx: BN): string {
-      return api.registry.createType("Balance", xx).toHuman();
-    },
-  };
-
-
-  const claimers_with_rewards = await get_available_rewards(cfg, claimers);                         // query the chain to populate claimers with available rewards 
-  const claim_pool = build_claim_pool(claimers_with_rewards);                                       // prepare a list of claims to submit with unique era/address combinations
-  const [claims_fulfilled, claims_failed] = await submit_claim(cfg, cfg.claim_key, claim_pool, false);    // submit payout transactions
-  console.log("Notifying stakers")
-  await notify_stakers(cfg, client, claims_fulfilled, claims_failed)
-
-  api.disconnect();
-
-  return;
-}
-
-async function fetch_claimers(endpoint: string, key: string): Promise<Array<StakerPayout>> {
-  let claimers: StakerPayout[] = new Array<StakerPayout>();
-
-  // optionally load addresses from cloudflare kv
-  if (key) {
-    const response = await fetch(
-      endpoint,
-      {
-        headers: { "X-Custom-PSK": key },
-      }
-    );
-    const text = await response.text();
-    const wallets = JSON.parse(text) as Array<ExternalWallet>;
-    claimers = wallets.map(({ ip, wallet }) => ({
-      id: EXTERNAL,
-      alias: ip,
-      address: wallet,
-    }));
+  constructor(cfg: ClaimConfig) {
+    this.cfg = cfg;
   }
 
-  return claimers as Array<StakerPayout>;
-}
-
-function convert_staker_rewards(
-  rewards: DeriveStakerReward[]
-): Map<number, StakerReward> {
-  //export type StakerReward = Map<number, Map<string, number>>;
-  const stakers = new Map<number, StakerReward>();
-  rewards.forEach(({ era, isValidator, validators }) => {
-    const rewards: ValidatorStakerReward[] = new Array();
-    let available = new BN(0);
-    Object.keys(validators).forEach((validator) => {
-      rewards.push({
-        address: validator,
-        total: validators[validator].total,
-        value: validators[validator].value,
-      });
-    });
-    stakers.set(era.toNumber(), {
-      isValidator: isValidator,
-      validators: rewards,
-      available: Object.values(validators).reduce(
-        (result, { value }) => result.iadd(value),
-        new BN(0)
-      ), // from https://github.com/polkadot-js/apps/blob/85c3af2055ff55a26fb77f8dd4de6d584055c579/packages/page-staking/src/Payouts/index.tsx#L89
-    });
-  });
-
-  return stakers;
-}
-
-function filter_staker_rewards(
-  rewards: DeriveStakerReward[][]
-): DeriveStakerReward[][] {
-  return rewards.map((claimer) => {
-    return claimer
-      .filter((reward) => {
-        // filter eraReward is somehow 0
-        return reward.eraReward.gt(new BN(0));
-      })
-      .filter(({ validators }) => {
-        // filter validator value is somehow 0
-        return Object.values(validators).some(({ value }) => {
-          return value.gt(new BN(0));
-        });
-      });
-  });
-}
-
-function pretty_print_claimers(cfg: Config, claimers: StakerPayout[]): void {
-  // pretty print what will be claimed
-  claimers.forEach((claimer) => {
-    console.log(
-      `claiming ${cfg.xx_bal(claimer.available!)} (${cfg.xx_usd(
-        claimer.available!
-      )}) for ${claimer.id} (${claimer.alias} - ${claimer.address}):`
-    ); // from https://github.com/polkadot-js/api/blob/2f07e1c45fbb1f698dbfe68c7fd4701c7741f4cd/packages/types-codec/src/base/UInt.spec.ts#L185 UGH
-
-    claimer.rewards!.forEach(({ isValidator, available, validators }, era) => {
-      let _era_info = `\tera ${era}`;
-      validators.forEach(({ address, value }) => {
-        _era_info += ` ${value.toHuman()} from validator ${address} `;
-      });
-      console.log(_era_info);
-    });
-  });
-}
-
-async function get_available_rewards(
-  cfg: Config,
-  claimers: StakerPayout[]
-): Promise<StakerPayout[]> {
-  // Populate a list of StakerPayout objects with the eras with rewards available
-
-  console.log(`Gathering staker rewards for ${claimers.length} claimers`);
-  const claimer_ids = claimers.map((value) => value.address);
-  try {
-    const staker_rewards = await cfg.api.derive.staking.stakerRewardsMultiEras(
-      claimer_ids,
-      cfg.eras_historic
-    ); // from https://github.com/polkadot-js/apps/blob/85c3af2055ff55a26fb77f8dd4de6d584055c579/packages/react-hooks/src/useOwnEraRewards.ts#L104
-    // filter rewards
-    const staker_rewards_filtered = filter_staker_rewards(staker_rewards);
-
-    let rewarded_claimers: number = 0;
-    let rewarded_eras: Set<number> = new Set();
-    staker_rewards_filtered.forEach((reward) => {
-      if (reward.length > 0) {
-        rewarded_claimers++;
-        reward.forEach((era) => {
-          rewarded_eras.add(era.era.toNumber());
-        });
-      }
-    });
-    console.log(
-      `Gathered rewards for ${rewarded_claimers} of the supplied ${claimers.length} claimers`
-    );
-    console.log(`Eras to claim: ${Array.from(rewarded_eras).sort()}`);
-
-    // plug staker rewards into staker payout items - assumes that stakerRewardsMultiEras returns an array of same length & indexing as claimers
-    const claimers_with_rewards: StakerPayout[] = claimers.map(
-      (value, index) => ({
-        ...value,
-        rewards: convert_staker_rewards(staker_rewards_filtered[index]),
-      })
-    );
-
-    // populate claimers with amount available to claim
-    const claimers_with_available: StakerPayout[] = claimers_with_rewards.map(
-      (claimer) => ({
-        ...claimer,
-        available: Array.from(
-          claimer.rewards?.values() as Iterable<StakerReward>
-        ).reduce((result, { available }) => result.iadd(available), new BN(0)),
-      })
-    );
-
-    const stash_total: BN = claimers_with_available.reduce<BN>(
-      (result, { available }) => result.iadd(available!),
-      new BN(0)
-    );
-    console.log(
-      `Total to claim: ${cfg.xx_bal(stash_total)} (${cfg.xx_usd(stash_total)})`
-    );
-
-    // pretty print what will be claimed
-    pretty_print_claimers(cfg, claimers_with_available);
-
-    return claimers_with_available;
-  } catch (e) {
-    console.log(e);
-    throw new Error("Failed getting staking rewards");
+  public static async create(cfg: ClaimConfig) {
+    const me = new Claim(cfg);
+    await me.prepare();
+    return me;
   }
-}
 
-async function submit_claim(
-  cfg: Config,
-  keyPair: KeyringPair,
-  claims: ClaimPool,
-  submit: boolean = true
-): Promise<[ClaimPool, ClaimPool]> {
-  const claims_fulfilled = new Array<Claim>() as ClaimPool;
-  const claims_failed = new Array<Claim>() as ClaimPool;
-  while (claims.length > 0) {
-    const payoutCalls: any = [];
-    const claims_batch = claims.splice(0, cfg.batch_size); //end not included
+  public async prepare(){
+    // populate stakers
+    const stakers = await this.cfg.db.getClaimers(this.cfg.claim_frequency); // get stakers from mongodb
+    if (this.cfg.external_stakers) {
+      const external_stakers = await this.cfg.external_stakers.fn(this.cfg.external_stakers.identifier, this.cfg.external_stakers.args);
+      stakers.push(...external_stakers); // if a ExternalStakerConfig object is provided, grab stakers from that endpoint
+    }
+    
+    try{
+      this.price = await get_xx_price();
+    } catch(e) {
+      console.log(`Error getting xx token price: ${e}`)
+    }
 
-    claims_batch.forEach(({ address, era, claimers }) => {
-      console.log(`Adding era ${era} claim for ${address} (claimers: ${Array.from(claimers?.keys() as Iterable<string>).join(", ")})`);
-      payoutCalls.push(cfg.api.tx.staking.payoutStakers(address, era));
-    });
+    // query the chain to populate stakers with available rewards
+    // STEP 1
+    console.log(`*** Claim Step 1: Querying the chain for rewards for ${pluralize(new Set(stakers.map((value)=>value.user_id)), 'claimer')} / ${pluralize(stakers, 'wallet')} ***`)
+    this.stakers = await this.get_available_rewards(stakers);
+
+    // prepare a list of claims to submit with unique era/address combinations
+    // STEP 2
+    console.log('*** Claim Step 2: Preparing claims from stakers list ***')
+    // Build EraClaim[] from StakerRewardsAvailable[]
+    this.era_claims = this.build_era_claims(this.stakers);
+    this.is_prepared = true; // set prepared flag
+    console.log(`\tPreparation of ${this.era_claims.length} claims completed`)
+  }
+
+  public async submit() {
+    // check claim is prepped and ready to go
+    if (!this.is_prepared) await this.prepare();
+
+    // submit payout transactions
+    // STEP 3
+    console.log(`*** Claim Step 3: Submitting ${this.era_claims.length} claims ***`)
+    const [claims_fulfilled, claims_failed] = await this.submit_claim(this.era_claims, false);
+
+    // notify stakers
+    // STEP 4
+    console.log("*** Claim Step 4: Notifying stakers of completed claims ***")
+    await this.notify_stakers(claims_fulfilled, claims_failed)
+    console.log(`\tNotified ${new Set(claims_fulfilled.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id).filter( ( id ) => id !== this.cfg.external_stakers?.identifier))).size} users of a seriously wicked payout`)
+    console.log(`\t${new Set(claims_failed.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id).filter( ( id ) => id !== this.cfg.external_stakers?.identifier))).size} users had seriously borked payouts`)
+    // disconnect
+    console.log(`Disconnecting from ${this.cfg.xx.endpoint}`)
+    this.cfg.xx.api.disconnect();
+  }
+
+  private async get_available_rewards(stakers: Staker[]): Promise<StakerRewardsAvailable[]> {
+    // Populate a list of StakerPayout objects with the eras with rewards available
 
     try {
-      if (payoutCalls.length > 0) {
-        console.log(`Batching ${payoutCalls.length} payouts:`);
-        const transactions = cfg.api.tx.utility.batchAll(payoutCalls);
-        const { partialFee, weight } = await transactions.paymentInfo(keyPair);
-        console.log(`transaction will have a weight of ${weight}, with ${partialFee.toHuman()} weight fees`);
-        
-        if (submit) {
-          console.log(`Submitting ${transactions.length} in batch`)
-          const unsub = await transactions.signAndSend(keyPair, { nonce: -1 }, ({ events = [], status }) =>
-          {
-              console.log(`Current status is ${status.type}`);
-              if (status.isInBlock) {
-                  console.log(`Transaction included at blockHash ${status.asInBlock.toHex()}`);
-                  events.forEach(({ event: { data, method, section }, phase }) => {
-                    console.log('\t', phase.toString(), `: ${section}.${method}`, data.toString());
-                  });
-              } else if (status.isFinalized) {
-                  console.log(`Transaction finalized at blockHash ${status.asFinalized.toHex()}`);
-                  unsub();
-              }
-          });
-        } else {
-          console.log("Transactions not submitted due to submit flag=false")
-        } 
+      // get all available rewards for all claimer wallets
+      const claimer_wallet_addresses: string[] = stakers.map((value) => value.wallet);
+      const available_eras = await this.cfg.xx.api.derive.staking.erasHistoric();
+      // stakerRewardsMultiEras builds an array (one for each claimer_wallet_address) of arrays (one for each era) of DeriveStakerReward
+      // from https://github.com/polkadot-js/apps/blob/85c3af2055ff55a26fb77f8dd4de6d584055c579/packages/react-hooks/src/useOwnEraRewards.ts#L104
+      const available_rewards = await this.cfg.xx.api.derive.staking.stakerRewardsMultiEras(claimer_wallet_addresses, available_eras);
 
-        // add the tx fee to fulfilled claims
-        claims_fulfilled.push(
-          ...claims_batch.map((claim) => ({
-            ...claim,
-            fee: partialFee.div(new BN(payoutCalls.length)),
-          }))
-        );
-      }
+      // plug staker rewards into staker payout items - assumes that stakerRewardsMultiEras rpc returns an array of same length & indexing as stakers 
+      const claimer_rewards = stakers.map<StakerRewards>( (staker_payout, index) => ({
+        ...staker_payout,
+        rewards: available_rewards[index]
+      }));
+  
+      // populate stakers with amount available to claim
+      const claimer_rewards_available = claimer_rewards.map<StakerRewardsAvailable>( (staker_rewards) => ({
+        ...staker_rewards,
+        available: staker_rewards.rewards!.reduce( (acc, current) => acc.iadd(Object.values(current.validators).reduce( (acc, current) => acc.iadd(current.value), new BN(0))), new BN(0))
+      }));
+
+  
+      // log summary of what rewards are available
+      const rewarded_claimers = available_rewards.filter( (value) => value.length)
+      const stash_total: BN = claimer_rewards_available.reduce<BN>( (result, { available }) => result.iadd(available!), new BN(0));
+      console.log(`Gathered rewards for ${rewarded_claimers.length} of the supplied ${pluralize(stakers, 'claimer')}`);
+      console.log(`Total to claim: ${this.cfg.xx.xx_bal_usd_string(stash_total, this.price)})`);
+
+      // table
+      // validator | eras | users
+      const rows = new Array();
+      const validators = new Set(available_rewards.map( (value) => value.map( (value) => Object.keys(value.validators))).flat(2));
+      for(const validator of validators){
+        rows.push({
+          validator,
+          eras: Array.from(new Set(available_rewards.map( (value) => value.filter( (value) => Object.keys(value.validators).includes(validator)).map( (value) => value.era.toNumber())).flat())).sort().toString(),
+          users: Array.from(new Set(claimer_rewards_available.map( (staker_payout) => staker_payout.rewards!.filter( (value) => Object.keys(value.validators).includes(validator)).map( (_) => staker_payout.user_id)).flat())).sort().toString(),
+      })}
+      console.table(rows)
+
+  
+      return claimer_rewards_available;
     } catch (e) {
-      console.log(`Could not perform one of the claims: ${e}`);
-      claims_failed.push(...claims_batch);
+      console.log(e);
+      throw new Error("Failed getting staking rewards");
     }
   }
-  console.log(
-    `Claimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
-  );
 
-  return [claims_fulfilled, claims_failed];
-}
+  private async submit_claim(era_claims: EraClaim[], submit: boolean = true): Promise<[EraClaim[], EraClaim[]]> {
+    const claims_fulfilled = new Array<EraClaim>() as EraClaim[];
+    const claims_failed = new Array<EraClaim>() as EraClaim[];
 
-function create_notify_map(claims: ClaimPool): Map<string, Map<string, ClaimNotify[]>> {
-  // Create a map indexed by user id that contains a list of their claims
-  const notify_map = new Map<string, Map<string, ClaimNotify[]>>();
-  claims.forEach(({ era, claimers, fee }) => {
-    claimers?.forEach((staker_payouts, user_id) => {
-      // skip if from web
-      if (user_id === EXTERNAL) return;
+    while (era_claims.length > 0) {
+      const payoutCalls: any = [];
+      const claims_batch = era_claims.splice(0, this.cfg.batch_size); //end not included
+  
+      claims_batch.forEach(({ validator, era, notify: stakers }) => {
+        console.log(`Adding era ${era} claim for ${validator} (stakers: ${Array.from(new Set(stakers.map( (staker) => staker.user_id))).join(", ")})`);
+        payoutCalls.push(this.cfg.xx.api.tx.staking.payoutStakers(validator, era));
+      });
+  
+      try {
+        if (payoutCalls.length > 0) {
+          console.log(`Batching ${payoutCalls.length} payouts:`);
+          const transactions = this.cfg.xx.api.tx.utility.batchAll(payoutCalls);
+          const { partialFee, weight } = await transactions.paymentInfo(this.cfg.claim_wallet);
+          console.log(`transaction will have a weight of ${weight}, with ${partialFee.toHuman()} weight fees`);
+          
+          if (submit) {
+            console.log(`Submitting ${transactions.length} in batch`)
+            const unsub = await transactions.signAndSend(this.cfg.claim_wallet, { nonce: -1 }, ({ events = [], status }) =>
+            {
+                console.log(`Current status is ${status.type}`);
+                if (status.isInBlock) {
+                    console.log(`Transaction included at blockHash ${status.asInBlock.toHex()}`);
+                    events.forEach(({ event: { data, method, section }, phase }) => {
+                      console.log('\t', phase.toString(), `: ${section}.${method}`, data.toString());
+                    });
+                } else if (status.isFinalized) {
+                    console.log(`Transaction finalized at blockHash ${status.asFinalized.toHex()}`);
+                    unsub();
+                }
+            });
+          } else {
+            console.log("Transactions not submitted due to submit flag=false")
+          } 
+  
+          // add the tx fee to fulfilled claims
+          claims_fulfilled.push(...claims_batch.map((claim) => ({
+            ...claim, 
+            fee: partialFee.div(new BN(payoutCalls.length))}))
+          );
+        }
+      } catch (e) {
+        console.log(`Could not perform one of the claims: ${e}`);
+        claims_failed.push(...claims_batch);
+      }
+    }
+    console.log(
+      `Claimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
+    );
+  
+    return [claims_fulfilled, claims_failed];
+  }
 
-      // each claimer id, put an entry in our notify map
-      if (!notify_map.get(user_id)) notify_map.set(user_id, new Map<string, ClaimNotify[]>());
+  private async notify_stakers(claims_fulfilled: EraClaim[], claims_failed: EraClaim[]): Promise<void> {
+    
+    function eraclaim_to_stakernotify(claims: EraClaim[]): Map<string, Map<string, StakerNotify[]>> {
+      // convert EraClaim[] to Map<id: string, Map<wallet: string, StakerNotify[]>>
+      const claims_notify = new Map<string, Map<string, StakerNotify[]>>()
+      claims.map( ({era, validator, notify}) => {
+        notify.map( ({user_id, wallet, alias, rewards, available}) => {
+          claims_notify.has(user_id) || claims_notify.set(user_id, new Map<string, StakerNotify[]>())
+          claims_notify.get(user_id)!.has(wallet) || claims_notify.get(user_id)!.set(wallet, [])
+          const reward = rewards.find( (reward) => reward.era.toNumber() === era)!
+          const staker_notify: StakerNotify = {
+            user_id: user_id,
+            wallet: wallet,
+            alias: alias,
+            era: era,
+            payout: Object.values(reward.validators).reduce( (acc, val) => acc.iadd(val.value), new BN(0)),
+            isValidator: reward.isValidator,
+            validators: Object.keys(reward.validators)
+          }
+          claims_notify.get(user_id)!.get(wallet)?.push(staker_notify)
+        })
+      })
+      return claims_notify;
+    }
 
-      staker_payouts.forEach((staker_payout) => {  
-        // each address, put an entry in the claimer map
-        if (!notify_map.get(user_id)?.get(staker_payout.address)) notify_map.get(user_id)?.set(staker_payout.address, new Array<ClaimNotify>());
-        
-        notify_map.get(user_id)?.get(staker_payout.address)?.push({
-          era: era,
-          address: staker_payout.address,
-          alias: staker_payout.alias,
-          payout: staker_payout.rewards!.get(era)!.available,
-          fee: fee,
-          isValidator: staker_payout.rewards!.get(era)!.isValidator,
-          validators: staker_payout.rewards!.get(era)!.validators,
+    const claims_fulfilled_notify = eraclaim_to_stakernotify(claims_fulfilled)
+    const claims_failed_notify = eraclaim_to_stakernotify(claims_failed)
+
+    for(const [user_id, stakernotify_by_wallet] of claims_fulfilled_notify) {
+      // Send a notification to the user
+      sendToDM(this.cfg.client, user_id, await this.notify_user_message(this.cfg, user_id, stakernotify_by_wallet, true));
+    }
+  
+    for(const [user_id, stakernotify_by_wallet] of claims_failed_notify) {
+      // Send a notification to the user
+      const _msg = await this.notify_user_message(this.cfg, user_id, stakernotify_by_wallet, false)
+      if (process.env.ADMIN_NOTIFY_CHANNEL){
+        if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(this.cfg.client, user_id, _msg);
+        else sendToChannel(this.cfg.client, process.env.ADMIN_NOTIFY_CHANNEL, _msg);
+      }
+    }
+  }
+
+  private async notify_user_message(cfg: ClaimConfig, user_id: string, claims: Map<string, StakerNotify[]>, success: boolean = true) : Promise<string[]> {
+    const retrows = new Array<string>();
+  
+    // header is always the same
+    const eras = Array.from(new Set([ ...claims.values() ].flat().map( (claim_notify) => claim_notify.era))).sort()
+    const wallets = Array.from(claims.keys())
+    const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
+    const _total_string = `${this.cfg.xx.xx_bal_usd_string(_total, this.price)}`;
+    retrows.push(`${success ? `Claimed rewards ${_total_string}` : 'Failed to claim rewards'} for ${pluralize(eras, 'era')} / ${pluralize(wallets, 'wallet')}:`)
+  
+    // msg format
+    // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
+    //     alias / xxxxxx:
+    //         Era xxx: xx/$ as validator|nominator of xxxxx
+    claims.forEach( (stakers_notify, wallet) => {
+      // build the top wallet string: alias / xxxxxx:
+      const alias: string | undefined | null = stakers_notify.find( (claim_notify) => Boolean(claim_notify.alias) )?.alias;
+      retrows.push(inlineCode(`${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 40)}:`));
+      
+      stakers_notify.forEach( (staker_notify) => {
+        // build the era line: Era xxx: xx
+        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} of ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
+        const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
+        retrows.push(inlineCode(`\tEra ${staker_notify.era}: ${this.cfg.xx.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`));
+      });
+    });
+
+    const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
+    retrows.push(inlineCode(' '));
+    retrows.push(inlineCode( `Claim ${Icons.WALLET}: ${cfg.claim_wallet.address}`));
+    retrows.push(inlineCode(`\tThis claim used ${this.cfg.xx.xx_bal_string(_total_fee)}, ${this.cfg.xx.xx_bal_string(await cfg.xx.wallet_balance(cfg.claim_wallet))} remaining`))
+    retrows.push(inlineCode(`\t👆 To support this claim feature, consider a donation`))
+  
+    retrows.push(inlineCode(' '));
+    retrows.push(inlineCode(ClaimLegend));
+  
+    return retrows;
+  }
+
+  private build_era_claims(stakers: StakerRewardsAvailable[]): EraClaim[] {
+    // fugly approach but easiest to manage complexity for now
+
+    //                             era         validator
+    const era_claims_map = new Map<number, Map<string, StakerRewardsAvailable[]>>();
+    stakers.filter( (staker) => staker.user_id !== this.cfg.external_stakers?.identifier).forEach( (staker) => {
+      staker.rewards.forEach( (reward) => {
+        const e = reward.era.toNumber();
+        const validator = Object.keys(reward.validators)[0]; // not sure if there are ever multiple validators
+
+        console.log(`era: ${e}, validators: ${Object.keys(reward.validators)}, wallet: ${staker.alias!}, reward: ${JSON.stringify(reward)}`)
+
+        // Create new map for the current era/address/id if it doesn't exist
+        era_claims_map.has(e) || era_claims_map.set(e, new Map<string, StakerRewardsAvailable[]>());
+        era_claims_map.get(e)!.has(validator) || era_claims_map.get(e)!.set(validator, []);
+        era_claims_map.get(e)!.get(validator)!.push(staker);
+      });
+    });
+
+    // era_claims_map: era/validator/user_id/wallet:StakerNotify
+    const era_claims: EraClaim[] = [];
+    era_claims_map.forEach((validators, era) => {
+      validators.forEach((stakers, validator) => {
+        era_claims.push({
+          era,
+          validator,
+          notify: stakers,
         });
       });
     });
-  });
-  return notify_map;
-}
 
-async function notify_user_message(cfg: Config, claims: Map<string, ClaimNotify[]>, success: boolean = true) : Promise<string[]> {
-  const retrows = new Array<string>();
-
-  const _era_len = [ ...claims.values() ].reduce( (acc, val) => Math.max(acc, val.length), -Infinity); // gets the longest length of eras from claims
-  // header is always the same
-  const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
-  const _total_string = `${cfg.xx_bal(_total)}/${cfg.xx_usd(_total)}`;
-  retrows.push(`${success ? `Claimed rewards ${_total_string}` : 'Failed to claim rewards'} for ${_era_len} era${_era_len === 1 ? "" : "s"} / ${claims.size} wallet${claims.size === 1 ? "" : "s"}:`)
-
-  // msg format
-  // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
-  //     alias / xxxxxx:
-  //         Era xxx: xx/$ as validator|nominator of xxxxx
-  claims.forEach( (value, wallet) => {
-    // build the top wallet string: alias / xxxxxx:
-    retrows.push(inlineCode(`${Icons.WALLET} ${prettify_address_alias(value[0].alias, wallet, false, 40)}:`));
-
-    value.forEach( (claim) => {
-      // build the era line: Era xxx: xx
-      const _nominator_validators = claim.validators.map(({ address }) => address) as string[];
-      const _nominator_string = claim.isValidator ? "" : `${Icons.NOMINATOR} of ${Icons.VALIDATOR} ${_nominator_validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
-      const _val_nom_info = `as ${claim.isValidator ? Icons.VALIDATOR : _nominator_string}`
-      retrows.push(inlineCode(`\tEra ${claim.era}: ${cfg.xx_bal(claim.payout)}/${cfg.xx_usd(claim.payout)} ${_val_nom_info}`));
-    });
-
-  })
-
-  const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
-  retrows.push(inlineCode(' '));
-  retrows.push(inlineCode( `Claim ${Icons.WALLET}: ${cfg.claim_key.address}`));
-  retrows.push(inlineCode(`\tThis claim used ${cfg.xx_bal(_total_fee)}, ${cfg.xx_bal(await cfg.claim_key_bal())} remaining`))
-  retrows.push(inlineCode(`\tTo support this claim feature, consider a donation to the claim wallet above.`))
-
-  retrows.push(inlineCode(' '));
-  retrows.push(inlineCode(ClaimLegend));
-
-  return retrows;
-}
-
-async function notify_stakers(
-  cfg: Config,
-  client: Client,
-  claims_fulfilled: ClaimPool,
-  claims_failed: ClaimPool
-): Promise<void> {
-  const notify_success : Map<string, Map<string, ClaimNotify[]>> = create_notify_map(claims_fulfilled);
-  const notify_failed : Map<string, Map<string, ClaimNotify[]>> = create_notify_map(claims_failed);
-
-  for(const [id, claims] of notify_success){
-    // Send a notification to the user
-    // skip if from external
-    if (id === EXTERNAL) return;
-    sendToDM(client, id, await notify_user_message(cfg, claims, true));
+    return era_claims;
   }
-
-  for(const [id, claims] of notify_failed){
-    // Send a notification to the user
-    // skip if from external
-    if (id === EXTERNAL) return;
-    if (process.env.ADMIN_NOTIFY_CHANNEL){
-      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, id, await notify_user_message(cfg, claims, true));
-      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, await notify_user_message(cfg, claims, false));
-    }
-  }
-}
-
-function build_claim_pool(claimers: StakerPayout[]): Claim[] {
-  // build a claim pool with unique era/addresses
-
-  const claim_pool_map = new Map<
-    number,
-    Map<string, Map<string, StakerPayout[]>>
-  >();
-  claimers.forEach((claimer) => {
-    claimer.rewards?.forEach((staker_reward, era) => {
-      if (!claim_pool_map.has(era))
-        claim_pool_map.set(era, new Map<string, Map<string, StakerPayout[]>>());
-
-      staker_reward.validators.forEach(({ address }) => {
-        if (!claim_pool_map.get(era)?.has(address))
-          claim_pool_map
-            .get(era)
-            ?.set(address, new Map<string, StakerPayout[]>());      // Create new map for the current era/address if it doesn't exist
-        if (!claim_pool_map.get(era)?.get(address)?.has(claimer.id))
-          claim_pool_map
-            .get(era)
-            ?.get(address)
-            ?.set(claimer.id, new Array<StakerPayout>());           // Create new array for the current era/address/id if it doesn't exist
-
-        claim_pool_map.get(era)?.get(address)?.get(claimer.id)?.push(claimer); // add staker id
-      });
-    });
-  });
-
-  const claim_pool: ClaimPool = new Array<Claim>();
-  claim_pool_map.forEach((validators, era) => {
-    validators.forEach((claimers, validator) => {
-      claim_pool.push({
-        era: era,
-        address: validator,
-        claimers: claimers,
-      });
-    });
-  });
-
-  return claim_pool;
 }

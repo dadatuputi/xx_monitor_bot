@@ -1,21 +1,18 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
-import { prettify_address_alias, Icons } from "../../utils.js";
-import { isValidAddressXXAddress } from "../../chain/index.js";
+import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL } from "../../utils.js";
+import { Chain, isValidAddressXXAddress } from "../../chain/index.js";
 import { ClaimRecord } from "../../db/types.js";
-import { claim } from "../../chain/claim.js"
-import { ClaimFrequency } from "../../chain/types.js";
+import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
 
 import type { DeleteResult, WithId } from "mongodb";
 import type { Database } from "../../db/index.js";
 import type {  AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
+import { Claim } from "../../chain/claim.js";
 
-// if required env vars aren't provided, throw error
-if ( !process.env.CHAIN_RPC_ENDPOINT 
-  || !process.env.CLAIM_CRON_REGULAR 
-  || !process.env.CLAIM_BATCH 
-  || !process.env.CLAIM_WALLET 
-  || !process.env.CLAIM_PASSWORD ) { throw new Error('Cannot load /claim command: missing chain or claim env vars') }
+// env guard
+import '../../env-guard/claim.js'
 
 export const data = new SlashCommandBuilder()
   .setName("claim")
@@ -134,8 +131,30 @@ export async function execute(
 
 
     case "now": {
-      claim(db, interaction.client, ClaimFrequency.NOW, +process.env.CLAIM_BATCH!, process.env.CLAIM_WALLET!, process.env.CLAIM_PASSWORD!, process.env.CLAIM_ENDPOINT, process.env.CLAIM_ENDPOINT_KEY);
       reply_string = "trying to claim";
+
+      const external_stakers: ExternalStakerConfig = {
+        fn: engulph_fetch_claimers,
+        identifier: EXTERNAL,
+        args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
+      }
+
+      async function doit(): Promise<void> {
+        const cfg: ClaimConfig = {
+          db: db,
+          client: interaction.client,
+          xx: await Chain.create(process.env.CHAIN_RPC_ENDPOINT!),
+          claim_frequency: ClaimFrequency.NOW,
+          batch_size: +process.env.CLAIM_BATCH!,
+          claim_wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
+          external_stakers: external_stakers
+        };
+
+        (await Claim.create(cfg)).submit();
+      }
+
+      doit()
+      
       break;
     }
 
