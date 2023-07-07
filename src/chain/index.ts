@@ -1,3 +1,4 @@
+import "@xxnetwork/types";
 import custom from "../custom-derives/index.js";
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { hexToU8a, isHex } from '@polkadot/util';
@@ -5,11 +6,13 @@ import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
 import type { BN } from "@polkadot/util";
-import { Era } from "@polkadot/types/interfaces/types.js";
+import { Era, Event } from "@polkadot/types/interfaces/types.js";
+import { Vec } from "@polkadot/types";
+import { FrameSystemEventRecord } from "@polkadot/types/lookup";
 
 const XX_SS58_PREFIX = 55;
 
-export function isValidAddressXXAddress(address: string) : boolean {
+export function isValidXXAddress(address: string) : boolean {
   try {
     encodeAddress(
       isHex(address)
@@ -22,7 +25,6 @@ export function isValidAddressXXAddress(address: string) : boolean {
     return false;
   }
 };
-
 
 export class Chain{
   public endpoint: string;
@@ -79,6 +81,31 @@ export class Chain{
     const { data: balance } = await this.api.query.system.account(address)
     return balance.free
   }
+
+  // public async events(){
+  //   this.api.query.system.extrinsicData
+
+  //   this.api.query.system.events((events: Vec<FrameSystemEventRecord>) => {
+  //     console.log(`\nReceived ${events.length} events:`);
+  
+  //     // Loop through the Vec<EventRecord>
+  //     events.forEach((record) => {
+  //       // Extract the phase, event and the event types
+  //       const { event, phase, topics } = record;
+  //       const types = event.typeDef;
+  
+  //       // Show what we are busy with
+  //       console.log(`\t${event.section}:${event.method}:: (phase=${phase.toString()})`);
+  //       console.log(`\t\t${event.meta.toString()}`);
+
+  //       // Loop through each of the parameters, displaying the type and data
+  //       event.data.forEach((data, index) => {
+  //         console.log(`\t\t\t${types[index].type}: ${data.toString()}`);
+  //       });
+  //     });
+  //   });
+  
+  // }
 
   public xx_bal_string(xx: BN): string {
     return this.api.registry.createType("Balance", xx).toHuman();

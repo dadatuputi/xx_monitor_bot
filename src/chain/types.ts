@@ -61,6 +61,7 @@ export interface ClaimConfig {
   batch_size: number,
   claim_wallet: KeyringPair,
   external_stakers?: ExternalStakerConfig
+  dry_run?: boolean;
 }
 
 export interface ExternalStakerConfig {
