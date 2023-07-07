@@ -1,3 +1,4 @@
+import { Chain } from "./chain/index.js";
 import { Database } from "./db/index.js";
 import { initDiscord } from "./discord/index.js";
 
@@ -25,3 +26,6 @@ initDiscord(db, process.env.DISCORD_TOKEN);
 // events/ready.js:	fires off the poller that downloads the current nodes list,
 // 					compares it to the database of monitored nodes, and sends dms when
 //					node status changes have happened.
+
+// const chain = await Chain.create(process.env.CHAIN_RPC_ENDPOINT!)
+// chain.events();

@@ -1,7 +1,7 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
 import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL } from "../../utils.js";
-import { Chain, isValidAddressXXAddress } from "../../chain/index.js";
+import { Chain, isValidXXAddress } from "../../chain/index.js";
 import { ClaimRecord } from "../../db/types.js";
 import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
 
@@ -88,7 +88,7 @@ export async function execute(
     case "weekly": {
       const wallet : string = interaction.options.getString("wallet", true);
       const wallet_name = interaction.options.getString("name", false);
-      if (!isValidAddressXXAddress(wallet)) {
+      if (!isValidXXAddress(wallet)) {
         reply_string = "Not a valid xx wallet address";
         break;
       }
@@ -147,7 +147,8 @@ export async function execute(
           claim_frequency: ClaimFrequency.NOW,
           batch_size: +process.env.CLAIM_BATCH!,
           claim_wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
-          external_stakers: external_stakers
+          external_stakers: external_stakers,
+          dry_run: true
         };
 
         (await Claim.create(cfg)).submit();

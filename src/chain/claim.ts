@@ -26,6 +26,8 @@ import type {
 
 // env guard
 import '../env-guard/claim.js'
+import { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
+import { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
 
 // test that we can connect to the provided endpoint
 if (! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
@@ -39,19 +41,21 @@ export async function startClaiming(
   claim_batch: number,
   claim_wallet: string,
   claim_pw: string,
-  external_stakers?: ExternalStakerConfig
+  external_stakers?: ExternalStakerConfig,
+  dry_run?: boolean
 ): Promise<void> {
   const job = new CronJob(
     claim_cron,
     async function () {
       const cfg: ClaimConfig = {
-        db: db,
-        client: client,
+        db,
+        client,
         xx: await Chain.create(chain_rpc),
-        claim_frequency: claim_frequency,
+        claim_frequency,
         batch_size: claim_batch,
         claim_wallet: Chain.init_key(JSON.parse(claim_wallet) as KeyringPair$Json, claim_pw),
-        external_stakers: external_stakers
+        external_stakers, 
+        dry_run
       }
       const claim = await Claim.create(cfg);
       await claim.prepare();
@@ -119,7 +123,7 @@ export class Claim {
     // submit payout transactions
     // STEP 3
     console.log(`*** Claim Step 3: Submitting ${this.era_claims.length} claims ***`)
-    const [claims_fulfilled, claims_failed] = await this.submit_claim(this.era_claims, false);
+    const [claims_fulfilled, claims_failed] = await this.submit_claim(this.era_claims);
 
     // notify stakers
     // STEP 4
@@ -182,12 +186,12 @@ export class Claim {
     }
   }
 
-  private async submit_claim(era_claims: EraClaim[], submit: boolean = true): Promise<[EraClaim[], EraClaim[]]> {
+  private async submit_claim(era_claims: EraClaim[]): Promise<[EraClaim[], EraClaim[]]> {
     const claims_fulfilled = new Array<EraClaim>() as EraClaim[];
     const claims_failed = new Array<EraClaim>() as EraClaim[];
 
     while (era_claims.length > 0) {
-      const payoutCalls: any = [];
+      const payoutCalls: Array<SubmittableExtrinsic<"promise", ISubmittableResult>> = [];
       const claims_batch = era_claims.splice(0, this.cfg.batch_size); //end not included
   
       claims_batch.forEach(({ validator, era, notify: stakers }) => {
@@ -202,7 +206,7 @@ export class Claim {
           const { partialFee, weight } = await transactions.paymentInfo(this.cfg.claim_wallet);
           console.log(`transaction will have a weight of ${weight}, with ${partialFee.toHuman()} weight fees`);
           
-          if (submit) {
+          if (!this.cfg.dry_run) {
             console.log(`Submitting ${transactions.length} in batch`)
             const unsub = await transactions.signAndSend(this.cfg.claim_wallet, { nonce: -1 }, ({ events = [], status }) =>
             {
@@ -218,14 +222,14 @@ export class Claim {
                 }
             });
           } else {
-            console.log("Transactions not submitted due to submit flag=false")
+            console.log("Dry run; transactions not submitted");
           } 
   
           // add the tx fee to fulfilled claims
-          claims_fulfilled.push(...claims_batch.map((claim) => ({
+          claims_fulfilled.push(...claims_batch.map<EraClaim>( (claim) => ({
             ...claim, 
-            fee: partialFee.div(new BN(payoutCalls.length))}))
-          );
+            fee: partialFee.div(new BN(payoutCalls.length))})));
+
         }
       } catch (e) {
         console.log(`Could not perform one of the claims: ${e}`);
@@ -244,7 +248,7 @@ export class Claim {
     function eraclaim_to_stakernotify(claims: EraClaim[]): Map<string, Map<string, StakerNotify[]>> {
       // convert EraClaim[] to Map<id: string, Map<wallet: string, StakerNotify[]>>
       const claims_notify = new Map<string, Map<string, StakerNotify[]>>()
-      claims.map( ({era, validator, notify}) => {
+      claims.map( ({era, validator, notify, fee}) => {
         notify.map( ({user_id, wallet, alias, rewards, available}) => {
           claims_notify.has(user_id) || claims_notify.set(user_id, new Map<string, StakerNotify[]>())
           claims_notify.get(user_id)!.has(wallet) || claims_notify.get(user_id)!.set(wallet, [])
@@ -256,7 +260,8 @@ export class Claim {
             era: era,
             payout: Object.values(reward.validators).reduce( (acc, val) => acc.iadd(val.value), new BN(0)),
             isValidator: reward.isValidator,
-            validators: Object.keys(reward.validators)
+            validators: Object.keys(reward.validators),
+            fee: fee?.divn(notify.length) // this further divids the fee by the number of claimers
           }
           claims_notify.get(user_id)!.get(wallet)?.push(staker_notify)
         })
@@ -330,8 +335,6 @@ export class Claim {
       staker.rewards.forEach( (reward) => {
         const e = reward.era.toNumber();
         const validator = Object.keys(reward.validators)[0]; // not sure if there are ever multiple validators
-
-        console.log(`era: ${e}, validators: ${Object.keys(reward.validators)}, wallet: ${staker.alias!}, reward: ${JSON.stringify(reward)}`)
 
         // Create new map for the current era/address/id if it doesn't exist
         era_claims_map.has(e) || era_claims_map.set(e, new Map<string, StakerRewardsAvailable[]>());
