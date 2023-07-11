@@ -295,8 +295,7 @@ export class Claim {
     const wallets = Array.from(claims.keys())
     const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
     const _total_string = `${this.cfg.xx.xx_bal_usd_string(_total, this.price)}`;
-    const _frequency = this.cfg.claim_frequency.charAt(0).toUpperCase + this.cfg.claim_frequency.slice(1);
-    retrows.push(`${success ? `${_frequency} claim results: claimed ${_total_string}` : 'failed to claim '} for ${pluralize(eras, 'era')} | ${pluralize(wallets, 'wallet')}:`)
+    retrows.push(inlineCode(`${success ? `${this.cfg.claim_frequency.value} claim results: ${_total_string}` : 'failed '}: ${pluralize(eras, 'era')} | ${pluralize(wallets, 'wallet')}:`));
   
     // msg format
     // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
@@ -305,23 +304,21 @@ export class Claim {
     claims.forEach( (stakers_notify, wallet) => {
       // build the top wallet string: alias / xxxxxx:
       const alias: string | undefined | null = stakers_notify.find( (claim_notify) => Boolean(claim_notify.alias) )?.alias;
-      retrows.push(inlineCode(`${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 40)}:`));
+      retrows.push(inlineCode(`  ${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 40)}:`));
       
       stakers_notify.forEach( (staker_notify) => {
         // build the era line: Era xxx: xx
-        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} of ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
+        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} | ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
         const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
-        retrows.push(inlineCode(`\tEra ${staker_notify.era}: ${this.cfg.xx.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`));
+        retrows.push(inlineCode(`    Era ${staker_notify.era}: ${this.cfg.xx.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`));
       });
     });
 
     const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
-    retrows.push(inlineCode(' '));
-    retrows.push(inlineCode( `Claim ${Icons.WALLET}: ${cfg.claim_wallet.address}`));
-    retrows.push(inlineCode(`\tThis claim used ${this.cfg.xx.xx_bal_string(_total_fee)}, ${this.cfg.xx.xx_bal_string(await cfg.xx.wallet_balance(cfg.claim_wallet))} remaining`))
-    retrows.push(inlineCode(`\t👆 To support this claim feature, consider a donation`))
+    const _claim_wallet_bal: BN = await cfg.xx.wallet_balance(cfg.claim_wallet);
+    retrows.push(inlineCode(`Fee: ${this.cfg.xx.xx_bal_string(_total_fee)} of ${this.cfg.xx.xx_bal_string(_claim_wallet_bal)} in ${Icons.WALLET} ${cfg.claim_wallet.address}`))
+    if (_claim_wallet_bal.ltn(100000000000)) retrows.push(inlineCode(`  To support this claim feature, consider a donation 👆`)) // print donate pitch if wallet is < 100 xx
   
-    retrows.push(inlineCode(' '));
     retrows.push(inlineCode(ClaimLegend));
   
     return retrows;

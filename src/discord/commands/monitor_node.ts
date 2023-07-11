@@ -45,10 +45,7 @@ export async function execute(
       reply_string = `${Icons.SUCCESS}  Updated \`${node_id}\` name to \`${node_name}\`.`;
     } else {
       // result was a new record
-      const monitoring = `${Icons.WATCH}  Monitoring ${prettify_address_alias(
-        node_name,
-        node_id
-      )}. Reporting changes `;
+      const monitoring = `${Icons.WATCH}  Monitoring ${prettify_address_alias(node_name, node_id)}. Reporting changes `;
 
       try {
         // if this interaction is from a channel, verify their dms are open by sending one

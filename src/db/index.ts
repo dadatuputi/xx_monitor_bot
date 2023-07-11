@@ -12,11 +12,9 @@ import type {
   Collection,
 } from "mongodb";
 import type { ClaimRecord, LogActionRecord, MonitorRecord, RecordUpdate } from "./types.js";
-import { Status } from "./types.js";
 import { MongoClient } from "mongodb";
 import { ClaimFrequency, Staker } from "../chain/types.js";
-
-export { Status, StatusIcon, StatusCmix } from "./types.js";
+import { Status } from "../cmix/types.js";
 
 export class Database {
   private client: MongoClient;
@@ -106,7 +104,7 @@ export class Database {
     }
   }
 
-  public async addClaim(user_id: string, frequency: string, wallet: string, wallet_name: string | null): Promise<Array<RecordUpdate> | null> {
+  public async addClaim(user_id: string, frequency: string, wallet: string, alias: string | null): Promise<Array<RecordUpdate> | null> {
     // Add a node to the monitered node list
     const updates = new Array<RecordUpdate>();
 
@@ -123,17 +121,17 @@ export class Database {
     if (result) {
       // User is already subscribed for this wallet
 
-      const update: Partial<ClaimRecord> = {
-        $set: {},
-      };
+      const update: Partial<ClaimRecord> = {$set: {}};
       // check if node name is set and the same
-      if (wallet_name && wallet_name !== result.alias) {
+      if (alias && alias !== result.alias) {
         // update node name
-        update.$set.alias = wallet_name;
+        update.$set = {
+          alias: alias,
+          user_set_alias: true}
         updates.push({
           key: "name",
           old: result.alias ? result.alias : "empty",
-          new: wallet_name
+          new: alias
         })
       } 
       if (frequency !== result.frequency) {
@@ -147,8 +145,6 @@ export class Database {
       }
 
       if (updates.length) {
-        console.log(update)
-        console.log(updates)
         if (!await this.claims.updateOne(query, update)) throw new Error(`Could not update: query (${query}), update (${update})`);
         return updates;
       } else {
@@ -160,18 +156,15 @@ export class Database {
         user: user_id,
         frequency: frequency,
         wallet: wallet,
-        alias: wallet_name
+        alias: alias,
+        user_set_alias: Boolean(alias)
       };
       if (!await this.claims.insertOne(new_doc)) throw new Error(`Could not update: doc (${new_doc})`);
       return updates;
     }
   }
 
-  public async updateNodeStatus(
-    node_id: string,
-    status: string,
-    changed: Date
-  ): Promise<MonitorRecord[] | undefined> {
+  public async updateNodeStatus(node_id: string, status: string, changed: Date): Promise<MonitorRecord[] | undefined> {
     // notify any users monitoring the provided node of a status change
 
     const query: Filter<MonitorRecord> = {
@@ -185,9 +178,7 @@ export class Database {
         _id: false,
       },
     };
-    const result: WithId<MonitorRecord>[] = await this.monitor_state
-      .find(query, options)
-      .toArray();
+    const result: WithId<MonitorRecord>[] = await this.monitor_state.find(query, options).toArray();
 
     if (result.length) {
       // update the value in the database
@@ -203,22 +194,69 @@ export class Database {
     }
   }
 
-  public async updateNodeName(node_id: string, new_name: string): Promise<any> {
+  public async updateNodeName(node_id: string, new_name: string): Promise<MonitorRecord[] | undefined> {
     // update all nodes with the new name, where user_set_name = false
 
     const query: Filter<MonitorRecord> = {
       node: node_id,
-      user_set_name: {
+      user_set_name: {    // only update records where the user hasn't set a name themselves
         $ne: true,
       },
+      name: {
+        $ne: new_name,    // only update records where the name is different
+      }
     };
-    const update: UpdateFilter<MonitorRecord> = {
-      $set: {
-        name: new_name,
-        user_set_name: false,
+    const options: FindOptions<MonitorRecord> = {
+      projection: {
+        _id: false,
       },
     };
-    return this.monitor_state.updateMany(query, update);
+    const result: WithId<MonitorRecord>[] = await this.monitor_state.find(query, options).toArray();
+    
+    if (result.length) {
+      // update the value in the database
+      const update: UpdateFilter<MonitorRecord> = {
+        $set: {
+          name: new_name,
+        },
+      };
+      this.monitor_state.updateMany(query, update);
+
+      return result as MonitorRecord[];
+    }
+  }
+
+  
+  public async updateClaimAlias(wallet: string, new_alias: string): Promise<ClaimRecord[] | undefined> {
+    // update all claims with the new alias, where user_set_alias = false
+
+    const query: Filter<ClaimRecord> = {
+      wallet: wallet,
+      user_set_alias: {
+        $ne: true,
+      },
+      alias: {
+        $ne: new_alias,
+      }
+    };
+    const options: FindOptions<ClaimRecord> = {
+      projection: {
+        _id: false,
+      },
+    };
+
+    const result: WithId<ClaimRecord>[] = await this.claims.find(query, options).toArray();
+    if (result.length) {
+      // update the value in the database
+      const update: UpdateFilter<ClaimRecord> = {
+        $set: {
+          alias: new_alias,
+        },
+      };
+      this.claims.updateMany(query, update);
+
+      return result as ClaimRecord[];
+    }
   }
 
   public async listUserNodes(user_id: string): Promise<WithId<MonitorRecord>[]> {
@@ -257,7 +295,7 @@ export class Database {
     for(const frequency of Object.values(ClaimFrequency)){
       const query: Filter<ClaimRecord> = {
         user: user_id,
-        frequency: frequency
+        frequency: frequency.key
       };
       const options: FindOptions<ClaimRecord> = {
         projection: {
@@ -265,7 +303,7 @@ export class Database {
         },
       };
       const results = await this.claims.find(query, options).toArray();
-      if (results.length) claims_map.set(frequency, results);
+      if (results.length) claims_map.set(frequency.key, results);
     }
     return claims_map;
   }
@@ -309,7 +347,7 @@ export class Database {
   public async getClaimers(claim_frequency: ClaimFrequency): Promise<Staker[]> {
     // Get all claimers for a certain frequency
 
-    const query: Filter<ClaimRecord> = claim_frequency !== ClaimFrequency.NOW ? {
+    const query: Filter<ClaimRecord> = claim_frequency !== ClaimFrequency.IMMEDIATE ? {
       frequency: claim_frequency,
     } : {};
     const options: FindOptions<ClaimRecord> = {

@@ -144,7 +144,7 @@ export async function execute(
           db: db,
           client: interaction.client,
           xx: await Chain.create(process.env.CHAIN_RPC_ENDPOINT!),
-          claim_frequency: ClaimFrequency.NOW,
+          claim_frequency: ClaimFrequency.IMMEDIATE,
           batch_size: +process.env.CLAIM_BATCH!,
           claim_wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
           external_stakers: external_stakers,

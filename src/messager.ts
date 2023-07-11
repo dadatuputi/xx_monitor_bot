@@ -1,6 +1,3 @@
-import { Status, StatusIcon } from "./db/index.js";
-import type { MonitorRecord } from "./db/types.js";
-import { prettify_address_alias, Icons } from "./utils.js";
 import type { Client, TextChannel } from "discord.js";
 
 const MAX_MESSAGE_SIZE = 2000;
@@ -50,17 +47,4 @@ export async function sendToChannel(client: Client, channel: string, message: st
       (channel as TextChannel).send(chunk);
     }
   })
-}
-
-export async function dmStatusChange(
-  client: Client,
-  node: MonitorRecord,
-  status_new: string
-) {
-  const status = status_new.toUpperCase() as keyof typeof Status;
-  var message = StatusIcon[status] + ` ${Icons.TRANSIT} ` + StatusIcon[status]; // old -> new status icon
-  message += `  ${prettify_address_alias(node.name, node.node)} `; // pretty node name
-  message += `is now ${status_new == Status.ERROR ? "in " : ""}${status}`; // new status
-
-  sendToDM(client, node.user, message);
 }

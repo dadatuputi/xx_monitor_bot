@@ -7,10 +7,17 @@ import type { Database } from "../db/index.js";
 import type { Client } from "discord.js";
 import type { Chain } from "./index.js";
 
-export enum ClaimFrequency {
-  DAILY = "daily",
-  WEEKLY = "weekly",
-  NOW = "now"
+export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
+  static readonly DAILY  = new ClaimFrequency('daily', '☀️');
+  static readonly WEEKLY  = new ClaimFrequency('weekly', '🇼');
+  static readonly IMMEDIATE  = new ClaimFrequency('immediate', '');
+
+  // private to disallow creating other instances of this type
+  private constructor(private readonly key: string, public readonly value: string) {
+    this.value = `${key.charAt(0).toUpperCase()}${key.slice(1)}${value ? ` ${value}` : ''}`   // e.g., Daily ☀️
+  }
+
+  toString() { return this.key; }
 }
 
 export interface ExternalStaker {

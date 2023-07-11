@@ -11,6 +11,7 @@ export enum Icons {
   WALLET = "💎",
   VALIDATOR = "❤️",
   NOMINATOR = "💚",
+  UPDATE = "✨",
 }
 
 export const XX_ID_LEN = 44;

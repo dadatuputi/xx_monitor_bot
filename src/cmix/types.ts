@@ -25,3 +25,27 @@ export interface CmixNode {
   whois: string;
   walletAddress: string;
 }
+
+export enum StatusIcon {
+  ONLINE = "🟢",
+  OFFLINE = "🔴",
+  ERROR = "⛔",
+  UNELECTED = "⬇️",
+  UNKNOWN = "❓",
+}
+
+export enum Status {
+  ONLINE = "online",
+  OFFLINE = "offline",
+  ERROR = "error",
+  UNELECTED = "unelected",
+  UNKNOWN = "unknown",
+}
+
+export enum StatusCmix {
+  "online" = Status.ONLINE,
+  "offline" = Status.OFFLINE,
+  "error" = Status.ERROR,
+  "not currently a validator" = Status.UNELECTED,
+  "unknown" = Status.UNKNOWN,
+}

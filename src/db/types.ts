@@ -1,30 +1,6 @@
 import type { Document, OptionalId } from "mongodb";
 import type { BN } from "@polkadot/util";
 
-export enum Status {
-  ONLINE = "online",
-  OFFLINE = "offline",
-  ERROR = "error",
-  UNELECTED = "unelected",
-  UNKNOWN = "unknown",
-}
-
-export enum StatusIcon {
-  ONLINE = "🟢",
-  OFFLINE = "🔴",
-  ERROR = "⛔",
-  UNELECTED = "⬇️",
-  UNKNOWN = "❓",
-}
-
-export enum StatusCmix {
-  "online" = Status.ONLINE,
-  "offline" = Status.OFFLINE,
-  "error" = Status.ERROR,
-  "not currently a validator" = Status.UNELECTED,
-  "unknown" = Status.UNKNOWN,
-}
-
 export interface RecordUpdate {
   key: string,
   old: string,
@@ -36,6 +12,7 @@ export interface ClaimRecord extends OptionalId<Document> {
   wallet: string; // wallet address
   frequency: string; // how often to claim
   alias?: string | null; // wallet name
+  user_set_alias: boolean; // true if user set the name, false otherwise
   last_claim?: Date | null; // timestamp of last claim
   last_amount?: BN | null; // last claim amount
 }

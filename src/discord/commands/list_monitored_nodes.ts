@@ -13,14 +13,12 @@ import type {
 import moment from "moment";
 import base64url from "base64url";
 import { prettify_address_alias, Icons } from "../../utils.js";
-import { Database, Status, StatusIcon } from "../../db/index.js";
+import { Database } from "../../db/index.js";
 import type { DeleteResult, Document, WithId } from "mongodb";
+import { Status, StatusIcon } from "../../cmix/types.js";
+import { MonitorRecord } from "../../db/types.js";
 
-function buildResponseButtons(
-  db: Database,
-  nodes: WithId<Document>[],
-  unmonitor_buttons: boolean = true
-) {
+function buildResponseButtons(db: Database, nodes: WithId<MonitorRecord>[], unmonitor_buttons: boolean = true) {
   let rows = new Array<ActionRowBuilder<ButtonBuilder>>();
   const MAX_BUTTON_TEXT_LEN = 80; // 80 is value from exception thrown when string is too long
 
@@ -78,7 +76,7 @@ function buildResponseButtons(
   return rows;
 }
 
-function buildResponseText(db: Database, nodes: WithId<Document>[]) {
+function buildResponseText(db: Database, nodes: WithId<MonitorRecord>[]) {
   let reply_string = "";
 
   // Print a list of nodes
@@ -89,13 +87,13 @@ function buildResponseText(db: Database, nodes: WithId<Document>[]) {
     const changed = node.changed
       ? ` since ${moment(node.changed).fromNow()}`
       : "";
-    const status: keyof typeof Status = node.status
-      ? node.status.toUpperCase()
-      : Status.UNKNOWN.toUpperCase(); // edge case for empty string status in the database
+    const status = node.status
+      ? node.status
+      : Status.UNKNOWN; // edge case for empty string status in the database
 
-    let line = StatusIcon[status].toString(); // node status icon
+    let line = StatusIcon[status.toUpperCase() as keyof typeof Status].toString(); // node status icon
     line += `  ${prettify_address_alias(node.name, node.node)}`; // node name & id
-    line += ` _(${status}${changed})_`; // status text & time since change
+    line += ` _(${status.toUpperCase()}${changed})_`; // status text & time since change
     line += `  [${Icons.LINK}](${url})`; // link to dashboard page for node
 
     reply_string += line + "\n";

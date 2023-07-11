@@ -1,12 +1,12 @@
 import "@xxnetwork/types";
 import custom from "../custom-derives/index.js";
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
-import { hexToU8a, isHex } from '@polkadot/util';
+import { hexToU8a, isHex, formatBalance } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
 import type { BN } from "@polkadot/util";
-import { Era, Event } from "@polkadot/types/interfaces/types.js";
+import { Balance, Era, Event } from "@polkadot/types/interfaces/types.js";
 import { Vec } from "@polkadot/types";
 import { FrameSystemEventRecord } from "@polkadot/types/lookup";
 
@@ -107,8 +107,13 @@ export class Chain{
   
   // }
 
-  public xx_bal_string(xx: BN): string {
-    return this.api.registry.createType("Balance", xx).toHuman();
+  public xx_bal_string(xx: number | bigint | BN | Balance, sig_digits: number = 2): string {
+    formatBalance.setDefaults({ decimals: this.api.registry.chainDecimals[0], unit: 'xx'})
+    const balfor = formatBalance(xx)
+    const [num, unit] = balfor.split(' ');
+    const [int, frac] = num.split('.');
+    const frac_short = frac?.slice(0,sig_digits) ?? ''
+    return `${int}${frac_short ? `.${frac_short}` : ''} ${unit}`
   }
 
   public xx_bal_usd_string(xx: BN, price: number | undefined): string {
