@@ -57,17 +57,18 @@ export async function startClaiming(
         external_stakers, 
         dry_run
       }
-      const claim = await Claim.create(cfg);
-      await claim.prepare();
-      await claim.submit();
+      console.log(`*** Starting ${claim_frequency} claim cron job ***`);
+      await (await Claim.create(cfg)).submit();
       await cfg.xx.api.disconnect();
+      console.log(`*** Completed ${claim_frequency} claim cron job ***`);
+      console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
     },
     null,
     true,
     'UTC'
   );
 
-  console.log(`*** Claim Cron Started: ${cronstrue.toString(claim_cron)} ***`);
+  console.log(`*** Claim Cron Started: ${claim_frequency} ${cronstrue.toString(claim_cron)} ***`);
   console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
 }
 
@@ -91,13 +92,16 @@ export class Claim {
   public async prepare(){
     // populate stakers
     const stakers = await this.cfg.db.getClaimers(this.cfg.claim_frequency); // get stakers from mongodb
+    console.log(`Pulled ${stakers.length} stakers from db`)
     if (this.cfg.external_stakers) {
       const external_stakers = await this.cfg.external_stakers.fn(this.cfg.external_stakers.identifier, this.cfg.external_stakers.args);
       stakers.push(...external_stakers); // if a ExternalStakerConfig object is provided, grab stakers from that endpoint
+      console.log(`Pulled ${external_stakers.length} stakers from external`)
     }
     
     try{
       this.price = await get_xx_price();
+      console.log(`Current token price: ${this.price}`)
     } catch(e) {
       console.log(`Error getting xx token price: ${e}`)
     }
@@ -163,8 +167,8 @@ export class Claim {
       // log summary of what rewards are available
       const rewarded_claimers = available_rewards.filter( (value) => value.length)
       const stash_total: BN = claimer_rewards_available.reduce<BN>( (result, { available }) => result.iadd(available!), new BN(0));
-      console.log(`Gathered rewards for ${rewarded_claimers.length} of the supplied ${pluralize(stakers, 'claimer')}`);
-      console.log(`Total to claim: ${this.cfg.xx.xx_bal_usd_string(stash_total, this.price)})`);
+      console.log(`\tGathered rewards for ${rewarded_claimers.length} of the supplied ${pluralize(stakers, 'claimer')}`);
+      console.log(`\tTotal to claim: ${this.cfg.xx.xx_bal_usd_string(stash_total, this.price)})`);
 
       // table
       // validator | eras | users
@@ -237,7 +241,7 @@ export class Claim {
       }
     }
     console.log(
-      `Claimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
+      `\tClaimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
     );
   
     return [claims_fulfilled, claims_failed];

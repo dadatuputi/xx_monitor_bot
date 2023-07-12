@@ -151,7 +151,8 @@ export async function execute(
           dry_run: true
         };
 
-        (await Claim.create(cfg)).submit();
+        await (await Claim.create(cfg)).submit();
+        await cfg.xx.api.disconnect();
       }
 
       doit()
