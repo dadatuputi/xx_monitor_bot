@@ -348,7 +348,7 @@ export class Database {
     // Get all claimers for a certain frequency
 
     const query: Filter<ClaimRecord> = claim_frequency !== ClaimFrequency.IMMEDIATE ? {
-      frequency: claim_frequency,
+      frequency: claim_frequency.toString(),
     } : {};
     const options: FindOptions<ClaimRecord> = {
       projection: {
