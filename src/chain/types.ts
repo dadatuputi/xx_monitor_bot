@@ -9,12 +9,21 @@ import type { Chain } from "./index.js";
 
 export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
   static readonly DAILY  = new ClaimFrequency('daily', '☀️');
-  static readonly WEEKLY  = new ClaimFrequency('weekly', '🇼');
+  static readonly WEEKLY  = new ClaimFrequency('weekly', '');
   static readonly IMMEDIATE  = new ClaimFrequency('immediate', '');
+  private _cron: string = '';
 
   // private to disallow creating other instances of this type
-  private constructor(private readonly key: string, public readonly value: string) {
-    this.value = `${key.charAt(0).toUpperCase()}${key.slice(1)}${value ? ` ${value}` : ''}`   // e.g., Daily ☀️
+  private constructor(private readonly key: string, public readonly symbol: string) {
+    this.symbol = `${key.charAt(0).toUpperCase()}${key.slice(1)}${symbol ? ` ${symbol}` : ''}`   // e.g., Daily ☀️
+  }
+
+  public set cron(cron: string) {
+    this._cron = cron;
+  }
+
+  public get cron(){
+    return this._cron;
   }
 
   toString() { return this.key; }
@@ -61,14 +70,10 @@ export interface StakerNotify extends Staker {
 }
 
 export interface ClaimConfig {
-  db: Database,
-  client: Client,
-  xx: Chain;
-  claim_frequency: ClaimFrequency,
-  batch_size: number,
-  claim_wallet: KeyringPair,
-  external_stakers?: ExternalStakerConfig
-  dry_run?: boolean;
+  frequency: ClaimFrequency,
+  batch: number,
+  wallet: KeyringPair,
+  dry_run?: boolean
 }
 
 export interface ExternalStakerConfig {

@@ -141,18 +141,16 @@ export async function execute(
 
       async function doit(): Promise<void> {
         const cfg: ClaimConfig = {
-          db: db,
-          client: interaction.client,
-          xx: await Chain.create(process.env.CHAIN_RPC_ENDPOINT!),
-          claim_frequency: ClaimFrequency.IMMEDIATE,
-          batch_size: +process.env.CLAIM_BATCH!,
-          claim_wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
-          external_stakers: external_stakers,
+          frequency: ClaimFrequency.IMMEDIATE,
+          batch: +process.env.CLAIM_BATCH!,
+          wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
           dry_run: true
         };
 
-        await (await Claim.create(cfg)).submit();
-        await cfg.xx.api.disconnect();
+        const chain = await Chain.create(process.env.CHAIN_RPC_ENDPOINT!);
+
+        await (await Claim.create(db, interaction.client, chain, cfg)).submit();
+        await chain.api.disconnect();
       }
 
       doit()
