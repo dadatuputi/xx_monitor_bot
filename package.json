@@ -18,6 +18,7 @@
     "@commander-js/extra-typings": "^11.0.0",
     "@polkadot/api": "^9.14.2",
     "base64url": "^3.0.1",
+    "chalk": "^5.3.0",
     "cron": "^2.3.1",
     "cronstrue": "^2.27.0",
     "discord.js": "^14.11.0",

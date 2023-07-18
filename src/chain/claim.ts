@@ -9,9 +9,11 @@ import { inlineCode } from "discord.js";
 import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize } from "../utils.js";
 import { Chain } from "./index.js";
 import { ClaimLegend } from "./types.js";
+import chalk from 'chalk';
 
 import type { Database } from "../db/index.js";
 import type { Client } from "discord.js";
+import type { ChalkInstance } from 'chalk';
 import type {
   ClaimFrequency,
   Staker,
@@ -23,6 +25,7 @@ import type {
   ExternalStakerConfig,
 } from "./types.js";
 
+
 // env guard
 import '../env-guard/claim.js'
 import { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
@@ -30,20 +33,6 @@ import { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
 
 // test that we can connect to the provided endpoint
 if (! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
-
-export async function startClaimingExternal(
-  db: Database,
-  client: Client,
-  chain_rpc: string,
-  claim_frequency: ClaimFrequency,
-  claim_batch: number,
-  claim_wallet: string,
-  claim_pw: string,
-  external_stakers?: ExternalStakerConfig,
-  dry_run?: boolean
-): Promise<void> {
-
-}
 
 export async function startClaiming(
   db: Database,
@@ -56,11 +45,12 @@ export async function startClaiming(
     claim_cfg.frequency.cron,
     async function () {
       const chain = await Chain.create(chain_rpc)
-      console.log(`*** Starting ${claim_cfg.frequency} claim cron job ***`);
-      await (await Claim.create(db, client, chain, claim_cfg)).submit();
+      const claim = await Claim.create(db, client, chain, claim_cfg, external)
+      claim.log(`*** Starting ${claim_cfg.frequency} ${external ? 'external':'discord'} claim cron job ***`);
+      await claim.submit();
       await chain.api.disconnect();
-      console.log(`*** Completed ${claim_cfg.frequency} claim cron job ***`);
-      console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
+      claim.log(`*** Completed ${claim_cfg.frequency} claim cron job ***`);
+      claim.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
     },
     null,
     true,
@@ -76,6 +66,9 @@ export class Claim {
   private price: number | undefined;
   private era_claims: EraClaim[] = [];
   private is_prepared: boolean = false;
+  private _log_color: ChalkInstance;
+  private _prefix: string;
+  private static _log_color_gen = Claim.log_color_gen()
 
   constructor(
     private readonly db: Database, 
@@ -83,6 +76,20 @@ export class Claim {
     private readonly chain: Chain, 
     private readonly cfg: ClaimConfig,
     private readonly external?: ExternalStakerConfig) {
+      this._log_color = Claim._log_color_gen.next().value
+      this._prefix = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase()
+  }
+
+  private static *log_color_gen(): Generator<ChalkInstance, any, ChalkInstance> {
+    const colors = [chalk.red, chalk.green, chalk.blue]
+    let idx = 0;
+    while (true){
+      yield colors[idx++%colors.length]
+    }
+  }
+
+  public log(...msg: unknown[]){
+    console.log(this._log_color(this._prefix, "\t", msg));
   }
 
   public static async create(db: Database, client: Client, chain: Chain, cfg: ClaimConfig, external?: ExternalStakerConfig) {
@@ -96,31 +103,31 @@ export class Claim {
     if (this.external) {
       const external_stakers = await this.external.fn(this.external.identifier, this.external.args);
       stakers.push(...external_stakers); // if a ExternalStakerConfig object is provided, grab stakers from that endpoint
-      console.log(`Pulled ${external_stakers.length} stakers from external`)
+      this.log(`Pulled ${external_stakers.length} stakers from external`)
     } else {
       stakers.push(...await this.db.getClaimers(this.cfg.frequency)); // get stakers from mongodb
-      console.log(`Pulled ${stakers.length} stakers from db`)
+      this.log(`Pulled ${stakers.length} stakers from db`)
     }
     
     try{
       this.price = await get_xx_price();
-      console.log(`Current token price: ${this.price}`)
+      this.log(`Current token price: ${this.price}`)
     } catch(e) {
-      console.log(`Error getting xx token price: ${e}`)
+      this.log(`Error getting xx token price: ${e}`)
     }
 
     // query the chain to populate stakers with available rewards
     // STEP 1
-    console.log(`*** Claim Step 1: Querying the chain for rewards for ${pluralize(new Set(stakers.map((value)=>value.user_id)), 'claimer')} / ${pluralize(stakers, 'wallet')} ***`)
+    this.log(`*** Claim Step 1: Querying the chain for rewards for ${pluralize(new Set(stakers.map((value)=>value.user_id)), 'claimer')} / ${pluralize(stakers, 'wallet')} ***`)
     this.stakers = await this.get_available_rewards(stakers);
 
     // prepare a list of claims to submit with unique era/address combinations
     // STEP 2
-    console.log('*** Claim Step 2: Preparing claims from stakers list ***')
+    this.log('*** Claim Step 2: Preparing claims from stakers list ***')
     // Build EraClaim[] from StakerRewardsAvailable[]
     this.era_claims = this.build_era_claims(this.stakers);
     this.is_prepared = true; // set prepared flag
-    console.log(`\tPreparation of ${this.era_claims.length} claims completed`)
+    this.log(`\tPreparation of ${this.era_claims.length} claims completed`)
   }
 
   public async submit() {
@@ -129,21 +136,21 @@ export class Claim {
 
     // submit payout transactions
     // STEP 3
-    console.log(`*** Claim Step 3: Submitting ${this.era_claims.length} claims ***`)
+    this.log(`*** Claim Step 3: Submitting ${this.era_claims.length} claims ***`)
     const [claims_fulfilled, claims_failed] = await this.submit_claim(this.era_claims);
 
     // notify stakers
     // STEP 4
-    console.log("*** Claim Step 4: Notifying stakers of completed claims ***")
+    this.log("*** Claim Step 4: Notifying stakers of completed claims ***")
     if (this.external){
-      console.log("\tExternal stakers, skipping")
+      this.log("\tExternal stakers, skipping")
     } else {
       await this.notify_stakers(claims_fulfilled, claims_failed)
-      console.log(`\tNotified ${new Set(claims_fulfilled.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users of a payout`)
-      console.log(`\t${new Set(claims_failed.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users had failed payouts`)
+      this.log(`\tNotified ${new Set(claims_fulfilled.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users of a payout`)
+      this.log(`\t${new Set(claims_failed.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users had failed payouts`)
     }
     // disconnect
-    console.log(`Disconnecting from ${this.chain.endpoint}`)
+    this.log(`Disconnecting from ${this.chain.endpoint}`)
     this.chain.api.disconnect();
   }
 
@@ -174,8 +181,8 @@ export class Claim {
       // log summary of what rewards are available
       const rewarded_claimers = available_rewards.filter( (value) => value.length)
       const stash_total: BN = claimer_rewards_available.reduce<BN>( (result, { available }) => result.iadd(available!), new BN(0));
-      console.log(`\tGathered rewards for ${rewarded_claimers.length} of the supplied ${pluralize(stakers, 'claimer')}`);
-      console.log(`\tTotal to claim: ${this.chain.xx_bal_usd_string(stash_total, this.price)})`);
+      this.log(`\tGathered rewards for ${rewarded_claimers.length} of the supplied ${pluralize(stakers, 'wallet')}`);
+      this.log(`\tTotal to claim: ${this.chain.xx_bal_usd_string(stash_total, this.price)})`);
 
       // table
       // validator | eras | users
@@ -192,7 +199,7 @@ export class Claim {
   
       return claimer_rewards_available;
     } catch (e) {
-      console.log(e);
+      this.log(e);
       throw new Error("Failed getting staking rewards");
     }
   }
@@ -206,34 +213,34 @@ export class Claim {
       const claims_batch = era_claims.splice(0, this.cfg.batch); //end not included
   
       claims_batch.forEach(({ validator, era, notify: stakers }) => {
-        console.log(`Adding era ${era} claim for ${validator} (stakers: ${Array.from(new Set(stakers.map( (staker) => staker.user_id))).join(", ")})`);
+        this.log(`Adding era ${era} claim for ${validator} (stakers: ${Array.from(new Set(stakers.map( (staker) => staker.user_id))).join(", ")})`);
         payoutCalls.push(this.chain.api.tx.staking.payoutStakers(validator, era));
       });
   
       try {
         if (payoutCalls.length > 0) {
-          console.log(`Batching ${payoutCalls.length} payouts:`);
+          this.log(`Batching ${payoutCalls.length} payouts:`);
           const transactions = this.chain.api.tx.utility.batchAll(payoutCalls);
           const { partialFee, weight } = await transactions.paymentInfo(this.cfg.wallet);
-          console.log(`transaction will have a weight of ${weight}, with ${partialFee.toHuman()} weight fees`);
+          this.log(`transaction will have a weight of ${weight}, with ${partialFee.toHuman()} weight fees`);
           
           if (!this.cfg.dry_run) {
-            console.log(`Submitting ${transactions.length} in batch`)
+            this.log(`Submitting ${transactions.length} in batch`)
             const unsub = await transactions.signAndSend(this.cfg.wallet, { nonce: -1 }, ({ events = [], status }) =>
             {
-                console.log(`Current status is ${status.type}`);
+                this.log(`Current status is ${status.type}`);
                 if (status.isInBlock) {
-                    console.log(`Transaction included at blockHash ${status.asInBlock.toHex()}`);
+                    this.log(`Transaction included at blockHash ${status.asInBlock.toHex()}`);
                     events.forEach(({ event: { data, method, section }, phase }) => {
-                      console.log('\t', phase.toString(), `: ${section}.${method}`, data.toString());
+                      this.log('\t', phase.toString(), `: ${section}.${method}`, data.toString());
                     });
                 } else if (status.isFinalized) {
-                    console.log(`Transaction finalized at blockHash ${status.asFinalized.toHex()}`);
+                    this.log(`Transaction finalized at blockHash ${status.asFinalized.toHex()}`);
                     unsub();
                 }
             });
           } else {
-            console.log("Dry run; transactions not submitted");
+            this.log("Dry run; transactions not submitted");
           } 
   
           // add the tx fee to fulfilled claims
@@ -243,11 +250,11 @@ export class Claim {
 
         }
       } catch (e) {
-        console.log(`Could not perform one of the claims: ${e}`);
+        this.log(`Could not perform one of the claims: ${e}`);
         claims_failed.push(...claims_batch);
       }
     }
-    console.log(
+    this.log(
       `\tClaimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
     );
   
