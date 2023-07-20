@@ -24,6 +24,8 @@ export interface MonitorRecord extends OptionalId<Document> {
   user_set_name: boolean; // true if user set the name, false otherwise
   status: string; // based on status object below,
   changed: Date | null; // timestamp of last state change,
+  commission?: number;
+  commission_changed?: Date
 }
 
 export interface LogActionRecord extends OptionalId<Document> {

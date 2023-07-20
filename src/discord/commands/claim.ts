@@ -12,7 +12,8 @@ import type { AutocompleteInteraction, ChatInputCommandInteraction } from "disco
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
 
 // env guard
-import '../../env-guard/claim.js'
+import '../../env-guard/claim.js';
+import '../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName("claim")
@@ -33,22 +34,6 @@ export const data = new SlashCommandBuilder()
       option
         .setName("name")
         .setDescription("A friendly name for the wallet")))
-  .addSubcommand(subcommand =>
-    subcommand
-      .setName('list')
-      .setDescription('List subscribed claim wallets'))
-  .addSubcommand(subcommand =>
-    subcommand
-      .setName('unsubscribe')
-      .setDescription('Unsubscribe a wallet')
-      .addStringOption((option) =>
-      option
-        .setName("wallet")
-        .setDescription("The wallet to unsubscribe")
-        .setRequired(true)
-        .setMaxLength(48)
-        .setMinLength(47)
-        .setAutocomplete(true)));
 
 if (process.env.CLAIM_CRON_WEEKLY) { // add a /claim weekly subcommand
   data.addSubcommand(subcommand =>
@@ -68,7 +53,6 @@ if (process.env.CLAIM_CRON_WEEKLY) { // add a /claim weekly subcommand
         .setName("name")
         .setDescription("A friendly name for the wallet")))
 }
-
 if (process.env.NODE_ENV === "development") { // add a /claim now subcommand when in dev mode
   data.addSubcommand(subcommand =>
     subcommand
@@ -76,11 +60,28 @@ if (process.env.NODE_ENV === "development") { // add a /claim now subcommand whe
       .setDescription('Development command'))
 }
 
+// continue adding so order is preserved
+data .addSubcommand(subcommand =>
+  subcommand
+    .setName('list')
+    .setDescription('List subscribed claim wallets'))
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('remove')
+      .setDescription('Unsubscribe a wallet')
+      .addStringOption((option) =>
+      option
+        .setName("wallet")
+        .setDescription("The wallet to unsubscribe")
+        .setRequired(true)
+        .setMaxLength(48)
+        .setMinLength(47)
+        .setAutocomplete(true)));
 
-export async function execute(
-  interaction: ChatInputCommandInteraction,
-  db: Database
-) {
+
+
+
+export async function execute(interaction: ChatInputCommandInteraction, db: Database) {
   const subcommand = interaction.options.getSubcommand();
   const user = interaction.user;
   const channel = interaction.channel
@@ -156,7 +157,7 @@ export async function execute(
 
         const chain = await Chain.create(process.env.CHAIN_RPC_ENDPOINT!);
 
-        await (await Claim.create(db, interaction.client, chain, cfg)).submit();
+        await (await Claim.create(db, chain, cfg)).submit();
         await chain.api.disconnect();
       }
 
@@ -179,7 +180,7 @@ export async function execute(
             claims.length > 1 ? "s" : ""
           }:\n`;
           claims.forEach((claim) => {
-            const url = `<${process.env.EXPLORER_URL}/${claim.wallet}>`;
+            const url = `${process.env.EXPLORER_URL}/${claim.wallet}`;
             const amount = claim.last_amount ? ` ${claim.last_amount} ` : ' ';
             const changed = claim.last_claim
               ? ` _(claimed${amount}${moment(claim.last_claim).fromNow()})_ `
@@ -188,7 +189,7 @@ export async function execute(
             let line = `${Icons.WALLET}`; // node status icon
             line += `  ${prettify_address_alias(claim.alias, claim.wallet, true, 48)}`; // node name & id
             line += `${changed}`; // status text & time since change
-            line += ` [${Icons.LINK}](${url})`; // link to dashboard page for node
+            line += ` [${Icons.LINK}](<${url}>)`; // link to dashboard page for node
   
             reply_string += line + "\n";
           });
@@ -200,21 +201,17 @@ export async function execute(
     }
 
 
-    case "unsubscribe": {
+    case "remove": {
       const wallet : string = interaction.options.getString("wallet", true);
 
       // Get list of users subscriptions
         const [result, deleted]: [DeleteResult, WithId<ClaimRecord>[]] = await db.deleteClaim(user.id, wallet);
       if (deleted.length) {
         // Deleted node successfully
-        reply_string = `${
-          Icons.DELETE
-        }  You are no longer subscribed to payouts for ${prettify_address_alias(deleted[0].alias, wallet)}.`;
+        reply_string = `${Icons.DELETE}  You are no longer subscribed to ${deleted[0].frequency} payouts for ${prettify_address_alias(deleted[0].alias, wallet)}.`;
       } else {
         // Node wasn't monitored
-        reply_string = `${
-          Icons.ERROR
-        }  Error: You are not subscribed to payouts for ${prettify_address_alias(null, wallet)}.`;
+        reply_string = `${Icons.ERROR}  Error: You are not subscribed to payouts for ${prettify_address_alias(null, wallet)}.`;
       }
     
       break;
@@ -223,11 +220,8 @@ export async function execute(
 
 
   await interaction.reply({ content: reply_string, ephemeral: eph });
-  console.log(
-    `User ${user.id} interaction from ${
-      eph ? "channel" : "dm"
-    }: claim ${subcommand}: ${reply_string}`
-  );
+  const options = interaction.options.data[0].options?.map( (opt) => `${opt.name}: ${opt.value}`)
+  console.log(`User ${user.id} interaction from ${eph ? "channel" : "dm"}: /${data.name} ${subcommand}${options && ` - ${options.join(', ')}`}`);
 }
 
 export async function autocomplete(

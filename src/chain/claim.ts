@@ -3,19 +3,20 @@
 import "@xxnetwork/types";
 import { BN } from "@polkadot/util";
 import { CronJob } from "cron";
-import { sendToChannel, sendToDM } from "../messager.js";
-import { inlineCode } from "discord.js";
-import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize } from "../utils.js";
+import { codeBlock, inlineCode, spoiler } from "discord.js";
+import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize, engulph_fetch_claimers, EXTERNAL } from "../utils.js";
 import { Chain } from "./index.js";
-import { ClaimLegend } from "./types.js";
+import { ClaimFrequency } from "./types.js";
+import { NotifyData, XXEvent } from "../events/types.js";
 import chalk from 'chalk';
 import cronstrue from 'cronstrue';
+import PubSub from 'pubsub-js';
 
 import type { Database } from "../db/index.js";
-import type { Client } from "discord.js";
 import type { ChalkInstance } from 'chalk';
 import type { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
 import type { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
+import type { KeyringPair$Json } from "@polkadot/keyring/types";
 import type {
   Staker,
   StakerRewards,
@@ -26,25 +27,58 @@ import type {
   ExternalStakerConfig,
 } from "./types.js";
 
-
 // env guard
 import '../env-guard/claim.js'
 
 // test that we can connect to the provided endpoint except when deploying commands
 if (!process.env.BOT_DEPLOY && ! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
 
+export async function startAllClaiming(
+  db: Database,
+  chain_rpc: string,
+) {
+
+  ClaimFrequency.DAILY.cron = process.env.CLAIM_CRON_DAILY!;
+  const cfg_daily: ClaimConfig = {
+    frequency: ClaimFrequency.DAILY,
+    batch: +process.env.CLAIM_BATCH!,
+    wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
+  }
+  ClaimFrequency.WEEKLY.cron = process.env.CLAIM_CRON_WEEKLY!;
+  const cfg_weekly: ClaimConfig = {
+    frequency: ClaimFrequency.WEEKLY,
+    batch: +process.env.CLAIM_BATCH!,
+    wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
+  }
+
+  // start discord claim cron
+  startClaiming(db, chain_rpc, cfg_daily);
+
+  if (process.env.CLAIM_CRON_WEEKLY) {
+    // start irregular claim cron if set
+    startClaiming(db, chain_rpc, cfg_weekly);
+
+    // start external staker claim cron
+    const external_stakers: ExternalStakerConfig = {
+      fn: engulph_fetch_claimers,
+      identifier: EXTERNAL,
+      args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
+    }
+    startClaiming(db, chain_rpc, cfg_weekly, external_stakers);
+  }
+}
+
 export async function startClaiming(
   db: Database,
-  client: Client,
   chain_rpc: string,
   claim_cfg: ClaimConfig,
   external?: ExternalStakerConfig,
-): Promise<void> {
+): Promise<void> {  
   const job = new CronJob(
     claim_cfg.frequency.cron,
     async function () {
       const chain = await Chain.create(chain_rpc)
-      const claim = await Claim.create(db, client, chain, claim_cfg, external)
+      const claim = await Claim.create(db, chain, claim_cfg, external)
       claim.log(`*** Starting ${external ? Icons.EXTERNAL:Icons.BOT} ${claim_cfg.frequency} claim cron ***`);
       await claim.submit();
       await chain.api.disconnect();
@@ -69,7 +103,6 @@ export class Claim {
 
   constructor(
     private readonly db: Database, 
-    private readonly client: Client, 
     private readonly chain: Chain, 
     private readonly cfg: ClaimConfig,
     private readonly external?: ExternalStakerConfig) {
@@ -89,8 +122,8 @@ export class Claim {
     console.log(this._log_color(this._prefix, "\t", msg));
   }
 
-  public static async create(db: Database, client: Client, chain: Chain, cfg: ClaimConfig, external?: ExternalStakerConfig) {
-    const me = new Claim(db, client, chain, cfg, external);
+  public static async create(db: Database, chain: Chain, cfg: ClaimConfig, external?: ExternalStakerConfig) {
+    const me = new Claim(db, chain, cfg, external);
     return me;
   }
 
@@ -286,23 +319,29 @@ export class Claim {
 
     const claims_fulfilled_notify = eraclaim_to_stakernotify(claims_fulfilled)
     const claims_failed_notify = eraclaim_to_stakernotify(claims_failed)
+    const claim_wallet_bal = await this.chain.wallet_balance(this.cfg.wallet);
+
 
     for(const [user_id, stakernotify_by_wallet] of claims_fulfilled_notify) {
       // Send a notification to the user
-      sendToDM(this.client, user_id, await this.notify_user_message(this.cfg, user_id, stakernotify_by_wallet, true));
+      const data: NotifyData = {
+        id: user_id,
+        msg: await this.notify_user_message(stakernotify_by_wallet, claim_wallet_bal, true),
+      }
+      PubSub.publish(XXEvent.CLAIM_EXECUTED, data)
     }
   
     for(const [user_id, stakernotify_by_wallet] of claims_failed_notify) {
       // Send a notification to the user
-      const _msg = await this.notify_user_message(this.cfg, user_id, stakernotify_by_wallet, false)
-      if (process.env.ADMIN_NOTIFY_CHANNEL){
-        if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(this.client, user_id, _msg);
-        else sendToChannel(this.client, process.env.ADMIN_NOTIFY_CHANNEL, _msg);
+      const data: NotifyData = {
+        id: user_id,
+        msg: await this.notify_user_message(stakernotify_by_wallet, claim_wallet_bal, false)
       }
+      PubSub.publish(XXEvent.CLAIM_FAILED, data)
     }
   }
 
-  private async notify_user_message(cfg: ClaimConfig, user_id: string, claims: Map<string, StakerNotify[]>, success: boolean = true) : Promise<string[]> {
+  private async notify_user_message(claims: Map<string, StakerNotify[]>, claim_wallet_bal: BN, success: boolean = true) : Promise<string[]> {
     const retrows = new Array<string>();
   
     // header is always the same
@@ -310,32 +349,35 @@ export class Claim {
     const wallets = Array.from(claims.keys())
     const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
     const _total_string = `${this.chain.xx_bal_usd_string(_total, this.price)}`;
-    retrows.push(inlineCode(`${success ? `${this.cfg.frequency.symbol} claim results: ${_total_string}` : 'failed '}: ${pluralize(eras, 'era')} | ${pluralize(wallets, 'wallet')}:`));
+    retrows.push(`${success ? `${this.cfg.frequency.symbol} claim results: ${_total_string}` : 'failed '}: ${pluralize(eras, 'era')} | ${pluralize(wallets, 'wallet')}`);
   
     // msg format
     // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
     //     alias / xxxxxx:
     //         Era xxx: xx/$ as validator|nominator of xxxxx
+    const codeblock = new Array<string>();
     claims.forEach( (stakers_notify, wallet) => {
       // build the top wallet string: alias / xxxxxx:
       const alias: string | undefined | null = stakers_notify.find( (claim_notify) => Boolean(claim_notify.alias) )?.alias;
-      retrows.push(inlineCode(`  ${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 40)}:`));
+      codeblock.push(`${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 30)}:`);
       
       stakers_notify.forEach( (staker_notify) => {
         // build the era line: Era xxx: xx
-        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} ⭆ ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
+        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR}⭆${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 9)).join(", ")}`;
         const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
-        retrows.push(inlineCode(`    Era ${staker_notify.era}: ${this.chain.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`));
+        codeblock.push(`  Era ${staker_notify.era}: ${this.chain.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`);
       });
     });
 
     const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
-    const _claim_wallet_bal: BN = await this.chain.wallet_balance(cfg.wallet);
-    retrows.push(inlineCode(`Fee: ${this.chain.xx_bal_string(_total_fee)} of ${this.chain.xx_bal_string(_claim_wallet_bal)} in ${Icons.WALLET} ${cfg.wallet.address}`))
-    if (_claim_wallet_bal.ltn(100000000000)) retrows.push(inlineCode(`  To support this claim feature, consider a donation 👆`)) // print donate pitch if wallet is < 100 xx
+    codeblock.push("");
+    codeblock.push(`  Fee: ${this.chain.xx_bal_string(_total_fee)} of ${this.chain.xx_bal_string(claim_wallet_bal)} in ${Icons.BOT} wallet`)
+    if (claim_wallet_bal.lt(new BN(10000*(10**this.chain.decimals)))) codeblock.push(`  To support this bot, type /donate`) // print donate pitch if wallet is < 10000 xx
+    codeblock.push("");
   
-    retrows.push(inlineCode(ClaimLegend));
-  
+    codeblock.push(ClaimLegend);
+
+    retrows.push(spoiler(codeBlock(codeblock.join('\n'))))
     return retrows;
   }
 
@@ -371,3 +413,5 @@ export class Claim {
     return era_claims;
   }
 }
+
+export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.NOMINATOR}=nominator, ${Icons.VALIDATOR}=validator`;

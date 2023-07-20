@@ -8,13 +8,14 @@ export enum Icons {
   DELETE = "🗑️",
   TRANSIT = "➜",
   LINK = "🔗",
-  WALLET = "💎",
+  WALLET = "🪙",
   VALIDATOR = "❤️",
   NOMINATOR = "💚",
   UPDATE = "✨",
   BOT = "🤖",
   EXTERNAL = "🌐",
   CMIX = "🖧",
+  DIAMOND = "💎",
 }
 
 export const XX_ID_LEN = 44;

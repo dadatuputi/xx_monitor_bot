@@ -1,11 +1,9 @@
-import { Icons } from "../utils.js";
-
 import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 import type { BN } from "@polkadot/util";
 import type { KeyringPair } from "@polkadot/keyring/types";
 
 export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
-  static readonly DAILY  = new ClaimFrequency('daily', '☀️');
+  static readonly DAILY  = new ClaimFrequency('daily', '');
   static readonly WEEKLY  = new ClaimFrequency('weekly', '');
   static readonly IMMEDIATE  = new ClaimFrequency('immediate', '');
   private _cron: string = '';
@@ -79,4 +77,10 @@ export interface ExternalStakerConfig {
   args: {[key: string]: any}
 }
 
-export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.NOMINATOR}=nominator, ${Icons.VALIDATOR}=validator`;
+export interface CommissionChange {
+  wallet: string,
+  cmix_id: string,
+  commission: number,
+  commission_previous: number,
+  chain_decimals: number,
+}

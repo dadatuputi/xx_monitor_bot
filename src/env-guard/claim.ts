@@ -1,6 +1,12 @@
-// if required env vars aren't provided, throw error
-if ( !process.env.CHAIN_RPC_ENDPOINT 
-    || !process.env.CLAIM_CRON_DAILY 
-    || !process.env.CLAIM_BATCH 
-    || !process.env.CLAIM_WALLET 
-    || !process.env.CLAIM_PASSWORD ) { throw new Error('Cannot load /claim command: missing chain or claim env vars') }
+import { guard } from "./index.js"
+
+const vars = [
+  'CHAIN_RPC_ENDPOINT',
+  'CLAIM_CRON_DAILY',
+  'CLAIM_BATCH',
+  'CLAIM_WALLET',
+  'CLAIM_PASSWORD',
+  'EXPLORER_URL',
+]
+
+guard(vars, 'claims');

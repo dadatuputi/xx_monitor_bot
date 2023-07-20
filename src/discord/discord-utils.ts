@@ -1,7 +1,7 @@
 // Script from https://discordjs.guide/creating-your-bot/command-deployment.html#command-registration, modified
 import { Command, Option, Argument } from "@commander-js/extra-typings";
 import { REST, Routes, Client, GatewayIntentBits, Events, SlashCommandBuilder, RESTPostAPIChatInputApplicationCommandsJSONBody, ApplicationCommandOptionType } from "discord.js";
-import { DiscordClient } from "./discord/types.js";
+import { DiscordClient } from "./types.js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -47,7 +47,7 @@ async function deploy(guildId?: string) {
 
   const commands = new Array<RESTPostAPIChatInputApplicationCommandsJSONBody>();
   // Grab all the command files from the commands directory
-  const commandsPath = join(__dirname, "discord", "commands");
+  const commandsPath = join(__dirname, "commands");
   const commandFiles = fs
     .readdirSync(commandsPath)
     .filter((file) => file.endsWith(".js"));

@@ -5,11 +5,14 @@ import { hexToU8a, isHex, formatBalance } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
 import { wait } from "../utils.js";
 import { cmix_id_b64 } from "../cmix/index.js";
+import { XXEvent } from "../events/types.js";
+import PubSub from 'pubsub-js';
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
 import type { BN } from "@polkadot/util";
 import type { Balance, Era } from "@polkadot/types/interfaces/types.js";
 import type { PalletStakingValidatorPrefs, } from "@polkadot/types/lookup";
+import type { CommissionChange } from "./types.js";
 
 const XX_SS58_PREFIX = 55;
 
@@ -27,9 +30,16 @@ export function isValidXXAddress(address: string) : boolean {
   }
 };
 
+export async function startListeningCommission(rpc: string) {
+  (await Chain.create(rpc)).subscribe_commission_change( (change) => {
+    PubSub.publish(XXEvent.VALIDATOR_COMMISSION_CHANGE, change)
+  });
+}
+
 export class Chain{
   public endpoint: string;
   public api!: ApiPromise;
+  public decimals: number = 9;
   
   constructor(endpoint: string) {
     this.endpoint = endpoint;
@@ -44,6 +54,8 @@ export class Chain{
     }    
     const api = await ApiPromise.create(options);
     await api.isReady;
+
+    this.decimals = api.registry.chainDecimals[0];
 
     // ensure chain is syncronized; from https://github.com/xx-labs/exchange-integration/blob/a027526819fdcfd4145fd45b7ceeeaaf371ebcf2/detect-transfers/index.js#L33
     while((await api.rpc.system.health()).isSyncing.isTrue){
@@ -92,33 +104,57 @@ export class Chain{
     return balance.free
   }
 
-  // public async events(){
-  //   this.api.query.system.extrinsicData
+  public async subscribe_commission_change(callbackfn: (change: CommissionChange) => void){
+    // https://polkadot.js.org/docs/api/cookbook/blocks/
+    console.log('Listening for commission changes');
 
-  //   this.api.query.system.events((events: Vec<FrameSystemEventRecord>) => {
-  //     console.log(`\nReceived ${events.length} events:`);
-  
-  //     // Loop through the Vec<EventRecord>
-  //     events.forEach((record) => {
-  //       // Extract the phase, event and the event types
-  //       const { event, phase, topics } = record;
-  //       const types = event.typeDef;
-  
-  //       // Show what we are busy with
-  //       console.log(`\t${event.section}:${event.method}:: (phase=${phase.toString()})`);
-  //       console.log(`\t\t${event.meta.toString()}`);
+    this.api.rpc.chain.subscribeFinalizedHeads(async (header) => {
+      const blockNumber = header.number.toNumber();
+      const blockHash = await this.api.rpc.chain.getBlockHash(blockNumber);
+      const signedBlock = await this.api.rpc.chain.getBlock(blockHash);
 
-  //       // Loop through each of the parameters, displaying the type and data
-  //       event.data.forEach((data, index) => {
-  //         console.log(`\t\t\t${types[index].type}: ${data.toString()}`);
-  //       });
-  //     });
-  //   });
-  
-  // }
+      for(const [index, extr] of signedBlock.block.extrinsics.entries()){
+        if (this.api.tx.staking.validate.is(extr)) {
+          const { method: { args } } = extr;
+          const arg = (args as [PalletStakingValidatorPrefs]).find((a) => a.has('commission')) // check that extrinsics args has 'commission'
+          if (arg) {
+            // check if event is a successful extrinsic
+            const apiAt = await this.api.at(signedBlock.block.header.hash);
+            const events = await apiAt.query.system.events();
+            for(const { event } of events.filter(({ phase }) => phase.isApplyExtrinsic && phase.asApplyExtrinsic.eq(index))) {
+              if (this.api.events.system.ExtrinsicSuccess.is(event)) {
+                // this was a successful commision change
+                const { cmixId } = (await apiAt.query.staking.ledger(extr.signer.toString())).unwrap();  // get ledger/cmixid of the signer
+                const change: CommissionChange = {
+                  wallet: extr.signer.toString(),
+                  cmix_id: cmix_id_b64(cmixId.unwrap().toU8a()),
+                  commission: arg.commission.unwrap().toNumber(),
+                  commission_previous: await this.get_commission(extr.signer.toString(), blockNumber-1),
+                  chain_decimals: this.decimals
+                }
+                callbackfn(change);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  private async get_commission(validator: string, block?: number): Promise<number> {
+    if (block) {
+      const blockHash = await this.api.rpc.chain.getBlockHash(block);
+      const apiAt = await this.api.at(blockHash);
+      const { commission } = await apiAt.query.staking.validators(validator);
+      return commission.toNumber();
+    } else {
+      const { commission } = await this.api.query.staking.validators(validator);
+      return commission.toNumber();
+    }
+  }
 
   public xx_bal_string(xx: number | bigint | BN | Balance, sig_digits: number = 2): string {
-    formatBalance.setDefaults({ decimals: this.api.registry.chainDecimals[0], unit: 'xx'})
+    formatBalance.setDefaults({ decimals: this.decimals, unit: 'xx'})
     const balfor = formatBalance(xx)
     const [num, unit] = balfor.split(' ');
     const [int, frac] = num.split('.');
@@ -155,6 +191,10 @@ export class Chain{
     } 
     
     return key_pair;
+  }
+
+  public static commissionToHuman(commission: number, decimals: number): string {
+    return `${(100 * commission/10**decimals).toFixed(2)}%`;
   }
 
 };

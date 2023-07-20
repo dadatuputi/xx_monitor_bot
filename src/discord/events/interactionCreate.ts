@@ -24,11 +24,7 @@ export async function execute(interaction: CommandInteraction, db: Database) {
     if (interaction.isChatInputCommand()) {
       // log action in db
       const user_id = interaction.user.id;
-      await db.logAction(
-        user_id,
-        interaction.commandName,
-        interaction.options.data.toString()
-      );
+      await db.logAction(user_id, interaction.commandName, interaction.options.data.toString());
       await command.execute(interaction, db);
     } else if (interaction.isAutocomplete()) {
       await command.autocomplete(interaction, db);

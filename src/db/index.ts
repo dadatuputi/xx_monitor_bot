@@ -1,20 +1,20 @@
+import { MongoClient } from "mongodb";
+import { ClaimFrequency, Staker } from "../chain/types.js";
+import { Status } from "../cmix/types.js";
+
 import type {
-  Document,
   Filter,
   FindOptions,
   InsertOneResult,
   UpdateResult,
   WithId,
-  OptionalId,
   UpdateFilter,
   DeleteResult,
   Db,
   Collection,
 } from "mongodb";
 import type { ClaimRecord, LogActionRecord, MonitorRecord, RecordUpdate } from "./types.js";
-import { MongoClient } from "mongodb";
-import { ClaimFrequency, Staker } from "../chain/types.js";
-import { Status } from "../cmix/types.js";
+
 
 export class Database {
   private client: MongoClient;
@@ -60,11 +60,7 @@ export class Database {
     return result;
   }
 
-  public async addNode(
-    user_id: string,
-    node_id: string,
-    node_name: string | null
-  ): Promise<any> {
+  public async addNode(user_id: string, node_id: string, node_name: string | null): Promise<InsertOneResult<MonitorRecord> | UpdateResult | undefined> {
     // Add a node to the monitered node list
 
     // check if user is already monitoring this node
@@ -73,14 +69,12 @@ export class Database {
       node: node_id,
     };
     const options: FindOptions<MonitorRecord> = {};
-    const result: WithId<MonitorRecord> | null = await this.monitor_state.findOne(
-      query,
-      options
-    );
+    const result: WithId<MonitorRecord> | null = await this.monitor_state.findOne(query, options);
+
+    // If result isn't null, user is already monitoring this node
+    // check if node name is set and the same
     if (result) {
-      // User is already monitoring this node
-      // check if node name is set and the same
-      if (node_name && node_name !== result.name) {
+      if (node_name && node_name !== result.name){
         // update node name
         const update: Partial<MonitorRecord> = {
           $set: {
@@ -90,8 +84,10 @@ export class Database {
         };
         return await this.monitor_state.updateOne(query, update);
       }
-      return false;
-    } else {
+      return undefined;
+    } 
+    else {
+      // user isn't monitoring this node yet
       const new_doc: MonitorRecord = {
         user: user_id,
         node: node_id,
@@ -164,9 +160,8 @@ export class Database {
     }
   }
 
-  public async updateNodeStatus(node_id: string, status: string, changed: Date): Promise<MonitorRecord[] | undefined> {
+  public async updateNodeStatus(node_id: string, status: string): Promise<MonitorRecord[]> {
     // notify any users monitoring the provided node of a status change
-
     const query: Filter<MonitorRecord> = {
       node: node_id,
       status: {
@@ -178,23 +173,50 @@ export class Database {
         _id: false,
       },
     };
-    const result: WithId<MonitorRecord>[] = await this.monitor_state.find(query, options).toArray();
+    const result: MonitorRecord[] = await this.monitor_state.find(query, options).toArray();
 
     if (result.length) {
       // update the value in the database
       const update: UpdateFilter<MonitorRecord> = {
         $set: {
           status: status,
-          changed: changed,
+          changed: new Date(),
         },
       };
       this.monitor_state.updateMany(query, update);
-
-      return result as MonitorRecord[];
     }
+    return result
   }
 
-  public async updateNodeName(node_id: string, new_name: string): Promise<MonitorRecord[] | undefined> {
+  public async updateNodeCommission(node_id: string, commission: number): Promise<MonitorRecord[]> {
+    // notify any users monitoring the provided node of a status change
+    const query: Filter<MonitorRecord> = {
+      node: node_id,
+      commission: {
+        $ne: commission,
+      },
+    };
+    const options: FindOptions<MonitorRecord> = {
+      projection: {
+        _id: false,
+      },
+    };
+    const result: MonitorRecord[] = await this.monitor_state.find(query, options).toArray();
+
+    if (result.length) {
+      // update the value in the database
+      const update: UpdateFilter<MonitorRecord> = {
+        $set: {
+          commission: commission,
+          commission_changed: new Date(),
+        },
+      };
+      this.monitor_state.updateMany(query, update);
+    }
+    return result;
+  }
+
+  public async updateNodeName(node_id: string, new_name: string): Promise<MonitorRecord[]> {
     // update all nodes with the new name, where user_set_name = false
 
     const query: Filter<MonitorRecord> = {
@@ -211,7 +233,7 @@ export class Database {
         _id: false,
       },
     };
-    const result: WithId<MonitorRecord>[] = await this.monitor_state.find(query, options).toArray();
+    const result: MonitorRecord[] = await this.monitor_state.find(query, options).toArray();
     
     if (result.length) {
       // update the value in the database
@@ -221,13 +243,12 @@ export class Database {
         },
       };
       this.monitor_state.updateMany(query, update);
-
-      return result as MonitorRecord[];
     }
+    return result
   }
 
   
-  public async updateClaimAlias(wallet: string, new_alias: string): Promise<ClaimRecord[] | undefined> {
+  public async updateClaimAlias(wallet: string, new_alias: string): Promise<ClaimRecord[]> {
     // update all claims with the new alias, where user_set_alias = false
 
     const query: Filter<ClaimRecord> = {
@@ -245,7 +266,7 @@ export class Database {
       },
     };
 
-    const result: WithId<ClaimRecord>[] = await this.claims.find(query, options).toArray();
+    const result: ClaimRecord[] = await this.claims.find(query, options).toArray();
     if (result.length) {
       // update the value in the database
       const update: UpdateFilter<ClaimRecord> = {
@@ -254,12 +275,11 @@ export class Database {
         },
       };
       this.claims.updateMany(query, update);
-
-      return result as ClaimRecord[];
     }
+    return result
   }
 
-  public async listUserNodes(user_id: string): Promise<WithId<MonitorRecord>[]> {
+  public async listUserNodes(user_id: string): Promise<MonitorRecord[]> {
     // Get list of user's subscriptions
 
     const query: Filter<MonitorRecord> = {
@@ -273,7 +293,7 @@ export class Database {
     return await this.monitor_state.find(query, options).toArray();
   }
 
-  public async listUserClaimsFlat(user_id: string): Promise<WithId<ClaimRecord>[]> {
+  public async listUserClaimsFlat(user_id: string): Promise<ClaimRecord[]> {
     // Get list of user's subscriptions
 
     const query: Filter<ClaimRecord> = {
@@ -308,10 +328,7 @@ export class Database {
     return claims_map;
   }
 
-  public async deleteNode(
-    user_id: string,
-    node_id: string
-  ): Promise<[DeleteResult, WithId<MonitorRecord>[]]> {
+  public async deleteNode(user_id: string, node_id: string): Promise<[DeleteResult, WithId<MonitorRecord>[]]> {
     // Delete the given node from the user record.
 
     const query: Filter<MonitorRecord> = {
@@ -319,9 +336,7 @@ export class Database {
       node: node_id,
     };
     const options: FindOptions<MonitorRecord> = {};
-    const deleted: WithId<MonitorRecord>[] = await this.monitor_state
-      .find(query, options)
-      .toArray();
+    const deleted: WithId<MonitorRecord>[] = await this.monitor_state.find(query, options).toArray();
     const result: DeleteResult = await this.monitor_state.deleteMany(query, options);
     return [result, deleted];
   }
@@ -337,9 +352,7 @@ export class Database {
       wallet: wallet,
     };
     const options: FindOptions<ClaimRecord> = {};
-    const deleted: WithId<ClaimRecord>[] = await this.claims
-      .find(query, options)
-      .toArray();
+    const deleted: WithId<ClaimRecord>[] = await this.claims.find(query, options).toArray();
     const result: DeleteResult = await this.claims.deleteMany(query, options);
     return [result, deleted];
   }
