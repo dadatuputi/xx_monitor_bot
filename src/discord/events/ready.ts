@@ -42,14 +42,12 @@ export function execute(client: DiscordClient, db: Database) {
       frequency: ClaimFrequency.DAILY,
       batch: +process.env.CLAIM_BATCH!,
       wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
-      dry_run: true,
     }
     ClaimFrequency.WEEKLY.cron = process.env.CLAIM_CRON_IRREGULAR!;
     const cfg_weekly: ClaimConfig = {
       frequency: ClaimFrequency.WEEKLY,
       batch: +process.env.CLAIM_BATCH!,
       wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
-      dry_run: true,
     }
 
     // start discord claim cron
