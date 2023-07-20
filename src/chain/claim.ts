@@ -30,8 +30,8 @@ import type {
 // env guard
 import '../env-guard/claim.js'
 
-// test that we can connect to the provided endpoint
-if (! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
+// test that we can connect to the provided endpoint except when deploying commands
+if (!process.env.BOT_DEPLOY && ! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
 
 export async function startClaiming(
   db: Database,

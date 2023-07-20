@@ -1,10 +1,10 @@
 // Script from https://discordjs.guide/creating-your-bot/command-deployment.html#command-registration, modified
 import { Command, Option, Argument } from "@commander-js/extra-typings";
-import { REST, Routes, Client, GatewayIntentBits, Events } from "discord.js";
+import { REST, Routes, Client, GatewayIntentBits, Events, SlashCommandBuilder, RESTPostAPIChatInputApplicationCommandsJSONBody, ApplicationCommandOptionType } from "discord.js";
 import { DiscordClient } from "./discord/types.js";
-import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,7 +45,7 @@ async function init_client(): Promise<DiscordClient> {
 async function deploy(guildId?: string) {
   const rest = new REST({ version: "10" }).setToken(token);
 
-  const commands = new Array<string>();
+  const commands = new Array<RESTPostAPIChatInputApplicationCommandsJSONBody>();
   // Grab all the command files from the commands directory
   const commandsPath = join(__dirname, "discord", "commands");
   const commandFiles = fs
@@ -58,7 +58,13 @@ async function deploy(guildId?: string) {
       const filePath = join(commandsPath, file);
       const command = await import(filePath);
       if ("data" in command && "execute" in command) {
-        commands.push(command.data.toJSON());
+        const data = command.data as SlashCommandBuilder;
+        commands.push(data.toJSON());
+        console.log(`Loading ${data.name} command: ${data.description}`)
+        // check for subcommands
+        for (const subcommand of data.options.filter( (option) => option.toJSON().type === ApplicationCommandOptionType.Subcommand)) {
+          console.log(`\tLoading ${subcommand.toJSON().name} subcommand: ${subcommand.toJSON().description}`)
+        }
       } else {
         throw new Error(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
       }
@@ -67,11 +73,9 @@ async function deploy(guildId?: string) {
     }
   }
 
-  console.log(
-    `Prepared ${commands.length} application (/) commands for deployment.`
-  );
+  console.log(`Prepared ${commands.length} application (/) commands for deployment ${guildId ? `to guildId ${guildId}` : "globally"}.`);
 
-  (async () => {
+  await (async () => {
     try {
       // Deploying commands
       const route = guildId
@@ -79,9 +83,6 @@ async function deploy(guildId?: string) {
         : Routes.applicationCommands(clientId);
       const data = await rest.put(route, { body: commands }) as any;
 
-      console.log(
-        `Successfully reloaded ${data.length} application (/) commands.`
-      );
     } catch (error) {
       // And of course, make sure you catch and log any errors!
       console.error(error);
@@ -117,7 +118,17 @@ program
       "Resets the global and guild commands if you have deployed to both"
     )
   )
+  .addOption(
+    new Option(
+      "--dev",
+      "Includes development commands in the deploy"
+    )
+  )
   .action(async (options) => {
+    process.env["BOT_DEPLOY"] = "true";
+    if (options.dev) {
+      process.env["NODE_ENV"] = "development"
+    }
     if (options.reset) {
       // reset the commands in server and globally; see https://stackoverflow.com/a/70167704/1486966
       console.log("Resetting commands...");

@@ -5,7 +5,7 @@
   "description": "",
   "main": "built/index.js",
   "scripts": {
-    "start": "node built/index.js",
+    "start": "NODE_ENV=production node built/index.js",
     "build": "tsc --build",
     "clean": "tsc --build --clean",
     "dev-start": "MONGO_CONTAINER_NAME=localhost node -r dotenv-expand/config built/index.js dotenv_config_path=./.env",

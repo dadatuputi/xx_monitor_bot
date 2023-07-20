@@ -4,12 +4,12 @@ import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL } from 
 import { Chain, isValidXXAddress } from "../../chain/index.js";
 import { ClaimRecord } from "../../db/types.js";
 import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
+import { Claim } from "../../chain/claim.js";
 
 import type { DeleteResult, WithId } from "mongodb";
 import type { Database } from "../../db/index.js";
-import type {  AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
-import type { KeyringPair, KeyringPair$Json } from "@polkadot/keyring/types";
-import { Claim } from "../../chain/claim.js";
+import type { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+import type { KeyringPair$Json } from "@polkadot/keyring/types";
 
 // env guard
 import '../../env-guard/claim.js'
@@ -17,10 +17,6 @@ import '../../env-guard/claim.js'
 export const data = new SlashCommandBuilder()
   .setName("claim")
   .setDescription("Claim rewards for a validator or nominator wallet")
-  .addSubcommand(subcommand =>
-    subcommand
-      .setName('now')
-      .setDescription('temporary command for testing'))
   .addSubcommand(subcommand =>
     subcommand 
       .setName('daily')
@@ -69,6 +65,14 @@ export const data = new SlashCommandBuilder()
         .setMaxLength(48)
         .setMinLength(47)
         .setAutocomplete(true)));
+
+if (process.env.NODE_ENV === "development") { // add a /claim now subcommand when in dev mode
+  data.addSubcommand(subcommand =>
+    subcommand
+      .setName('now')
+      .setDescription('Development command'))
+}
+
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
