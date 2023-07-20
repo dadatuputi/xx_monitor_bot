@@ -35,22 +35,6 @@ export const data = new SlashCommandBuilder()
         .setDescription("A friendly name for the wallet")))
   .addSubcommand(subcommand =>
     subcommand
-      .setName('weekly')
-      .setDescription('Subscribe to weekly payouts')
-      .addStringOption((option) =>
-      option
-        .setName("wallet")
-        .setDescription("The wallet to payout")
-        .setRequired(true)
-        .setMaxLength(48)
-        .setMinLength(47)
-        .setAutocomplete(true))
-      .addStringOption((option) =>
-      option
-        .setName("name")
-        .setDescription("A friendly name for the wallet")))
-  .addSubcommand(subcommand =>
-    subcommand
       .setName('list')
       .setDescription('List subscribed claim wallets'))
   .addSubcommand(subcommand =>
@@ -65,6 +49,25 @@ export const data = new SlashCommandBuilder()
         .setMaxLength(48)
         .setMinLength(47)
         .setAutocomplete(true)));
+
+if (process.env.CLAIM_CRON_WEEKLY) { // add a /claim weekly subcommand
+  data.addSubcommand(subcommand =>
+    subcommand
+      .setName('weekly')
+      .setDescription('Subscribe to weekly payouts')
+      .addStringOption((option) =>
+      option
+        .setName("wallet")
+        .setDescription("The wallet to payout")
+        .setRequired(true)
+        .setMaxLength(48)
+        .setMinLength(47)
+        .setAutocomplete(true))
+      .addStringOption((option) =>
+      option
+        .setName("name")
+        .setDescription("A friendly name for the wallet")))
+}
 
 if (process.env.NODE_ENV === "development") { // add a /claim now subcommand when in dev mode
   data.addSubcommand(subcommand =>

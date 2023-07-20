@@ -37,13 +37,13 @@ export function execute(client: DiscordClient, db: Database) {
   // if /claim command loaded, start claim cron(s)
   if (client.commands.has('claim')) {
 
-    ClaimFrequency.DAILY.cron = process.env.CLAIM_CRON_REGULAR!;
+    ClaimFrequency.DAILY.cron = process.env.CLAIM_CRON_DAILY!;
     const cfg_daily: ClaimConfig = {
       frequency: ClaimFrequency.DAILY,
       batch: +process.env.CLAIM_BATCH!,
       wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
     }
-    ClaimFrequency.WEEKLY.cron = process.env.CLAIM_CRON_IRREGULAR!;
+    ClaimFrequency.WEEKLY.cron = process.env.CLAIM_CRON_WEEKLY!;
     const cfg_weekly: ClaimConfig = {
       frequency: ClaimFrequency.WEEKLY,
       batch: +process.env.CLAIM_BATCH!,
@@ -53,7 +53,7 @@ export function execute(client: DiscordClient, db: Database) {
     // start discord claim cron
     startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT!, cfg_daily);
     
-    if (process.env.CLAIM_CRON_IRREGULAR) {
+    if (process.env.CLAIM_CRON_WEEKLY) {
       // start irregular claim cron if set
       startClaiming(db, client, process.env.CHAIN_RPC_ENDPOINT!, cfg_weekly);
 
