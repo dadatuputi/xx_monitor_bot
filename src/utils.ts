@@ -12,6 +12,9 @@ export enum Icons {
   VALIDATOR = "❤️",
   NOMINATOR = "💚",
   UPDATE = "✨",
+  BOT = "🤖",
+  EXTERNAL = "🌐",
+  CMIX = "🖧",
 }
 
 export const XX_ID_LEN = 44;
@@ -86,6 +89,11 @@ export function pluralize(collection: Array<any> | Map<any, any> | Set<any>, nou
   return `${count} ${noun}${count !== 1 ? suffix : ''}`;
 }
 
+export async function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 export const EXTERNAL = 'external';    // string used to identify wallets claimed from web
 // This is an engul.ph-specific implementation of an external staker source; it can be replaced with a function that returns Array<Staker>

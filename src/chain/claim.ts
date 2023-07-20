@@ -46,19 +46,17 @@ export async function startClaiming(
     async function () {
       const chain = await Chain.create(chain_rpc)
       const claim = await Claim.create(db, client, chain, claim_cfg, external)
-      claim.log(`*** Starting ${claim_cfg.frequency} ${external ? 'external':'discord'} claim cron job ***`);
+      claim.log(`*** Starting ${external ? Icons.EXTERNAL:Icons.BOT} ${claim_cfg.frequency} claim cron ***`);
       await claim.submit();
       await chain.api.disconnect();
-      claim.log(`*** Completed ${claim_cfg.frequency} claim cron job ***`);
-      claim.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
+      claim.log(`*** Completed ${external ? Icons.EXTERNAL:Icons.BOT} ${claim_cfg.frequency} claim cron; next run: ${job.nextDate().toRFC2822()} ***`);
     },
     null,
     true,
     'UTC'
   );
 
-  console.log(`*** Claim Cron Started: ${claim_cfg.frequency} ${cronstrue.toString(claim_cfg.frequency.cron)} ***`);
-  console.log(`*** Next run: ${job.nextDate().toRFC2822()} ***`);
+  console.log(`*** Claim Cron Started: ${external ? Icons.EXTERNAL:Icons.BOT} ${claim_cfg.frequency} ${cronstrue.toString(claim_cfg.frequency.cron)}; next run: ${job.nextDate().toRFC2822()} ***`);
 }
 
 export class Claim {

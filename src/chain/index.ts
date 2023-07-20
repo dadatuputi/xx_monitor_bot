@@ -3,12 +3,20 @@ import custom from "../custom-derives/index.js";
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { hexToU8a, isHex, formatBalance } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
+import base64url from "base64url";
+
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
 import type { BN } from "@polkadot/util";
-import { Balance, Era, Event } from "@polkadot/types/interfaces/types.js";
+import type { StakingQueryFlags } from "@polkadot/api-derive/types";
+import { Balance, Era, Event, H256, ValidatorPrefs } from "@polkadot/types/interfaces/types.js";
 import { Vec } from "@polkadot/types";
-import { FrameSystemEventRecord } from "@polkadot/types/lookup";
+import { FrameSystemEventRecord, PalletStakingValidatorPrefs, } from "@polkadot/types/lookup";
+import { wait } from "../utils.js";
+import { CommissionChange } from "./types.js";
+import { AnyTuple, RegistryError, } from "@polkadot/types/types";
+import type { DeriveStakingQuery, DeriveStakingWaiting } from '@polkadot/api-derive/staking/types';
+import { cmix_id_b64 } from "../cmix/index.js";
 
 const XX_SS58_PREFIX = 55;
 
@@ -42,6 +50,15 @@ export class Chain{
       throwOnConnect: true,
     }    
     const api = await ApiPromise.create(options);
+    await api.isReady;
+
+    // ensure chain is syncronized; from https://github.com/xx-labs/exchange-integration/blob/a027526819fdcfd4145fd45b7ceeeaaf371ebcf2/detect-transfers/index.js#L33
+    while((await api.rpc.system.health()).isSyncing.isTrue){
+      const sec = 5;
+      console.log(`Chain is syncing, waiting ${sec} seconds`);
+      await wait(sec*1000);
+    }
+
     const [chain, nodeName, nodeVersion, era] = await Promise.all([
       api.rpc.system.chain(),
       api.rpc.system.name(),

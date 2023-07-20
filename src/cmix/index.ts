@@ -34,7 +34,7 @@ async function poll(db: Database, client: Client, api_endpoint: string) {
     console.log(`Non-200 response:\nresponse: ${response}\nbody: ${results}}`);
   } else {
     // Process the results
-    console.log(`Parsing ${results.nodes.length} nodes`);
+    console.log(`${Icons.CMIX} Parsing ${results.nodes.length} cMix nodes`);
 
     // step through each node result and send its status to the monitoring db
     results.nodes.forEach(async (node) => {
@@ -83,4 +83,8 @@ async function poll(db: Database, client: Client, api_endpoint: string) {
       }
     });
   }
+}
+
+export function cmix_id_b64(id: Uint8Array): string {
+  return Buffer.from(id).toString('base64').replace('=', 'C');
 }
