@@ -1,11 +1,8 @@
 import { Icons } from "../utils.js";
-import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 
+import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 import type { BN } from "@polkadot/util";
 import type { KeyringPair } from "@polkadot/keyring/types";
-import type { Database } from "../db/index.js";
-import type { Client } from "discord.js";
-import type { Chain } from "./index.js";
 
 export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
   static readonly DAILY  = new ClaimFrequency('daily', '☀️');

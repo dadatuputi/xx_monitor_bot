@@ -1,12 +1,8 @@
-import { Chain } from "./chain/index.js";
 import { Database } from "./db/index.js";
 import { initDiscord } from "./discord/index.js";
 
 var env = process.env.NODE_ENV || "development";
-
 console.log(`NODE_ENV: ${env}`);
-console.log(`NODE_EXTRA_CA_CERTS: ${process.env.NODE_EXTRA_CA_CERTS}`);
-
 if (env === "development") {
   console.log(process.env);
 }
@@ -27,5 +23,3 @@ initDiscord(db, process.env.DISCORD_TOKEN);
 // 					compares it to the database of monitored nodes, and sends dms when
 //					node status changes have happened.
 
-// const chain = await Chain.create(process.env.CHAIN_RPC_ENDPOINT!)
-// chain.events();

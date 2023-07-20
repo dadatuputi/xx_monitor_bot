@@ -2,7 +2,6 @@
 
 import "@xxnetwork/types";
 import { BN } from "@polkadot/util";
-import cronstrue from 'cronstrue';
 import { CronJob } from "cron";
 import { sendToChannel, sendToDM } from "../messager.js";
 import { inlineCode } from "discord.js";
@@ -10,12 +9,14 @@ import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize } fr
 import { Chain } from "./index.js";
 import { ClaimLegend } from "./types.js";
 import chalk from 'chalk';
+import cronstrue from 'cronstrue';
 
 import type { Database } from "../db/index.js";
 import type { Client } from "discord.js";
 import type { ChalkInstance } from 'chalk';
+import type { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
+import type { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
 import type {
-  ClaimFrequency,
   Staker,
   StakerRewards,
   StakerRewardsAvailable,
@@ -28,8 +29,6 @@ import type {
 
 // env guard
 import '../env-guard/claim.js'
-import { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
-import { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
 
 // test that we can connect to the provided endpoint
 if (! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
@@ -324,7 +323,7 @@ export class Claim {
       
       stakers_notify.forEach( (staker_notify) => {
         // build the era line: Era xxx: xx
-        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} | ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
+        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR} ⭆ ${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 11)).join(", ")}`;
         const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
         retrows.push(inlineCode(`    Era ${staker_notify.era}: ${this.chain.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`));
       });
