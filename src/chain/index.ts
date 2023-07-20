@@ -3,20 +3,13 @@ import custom from "../custom-derives/index.js";
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { hexToU8a, isHex, formatBalance } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
-import base64url from "base64url";
-
+import { wait } from "../utils.js";
+import { cmix_id_b64 } from "../cmix/index.js";
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
 import type { BN } from "@polkadot/util";
-import type { StakingQueryFlags } from "@polkadot/api-derive/types";
-import { Balance, Era, Event, H256, ValidatorPrefs } from "@polkadot/types/interfaces/types.js";
-import { Vec } from "@polkadot/types";
-import { FrameSystemEventRecord, PalletStakingValidatorPrefs, } from "@polkadot/types/lookup";
-import { wait } from "../utils.js";
-import { CommissionChange } from "./types.js";
-import { AnyTuple, RegistryError, } from "@polkadot/types/types";
-import type { DeriveStakingQuery, DeriveStakingWaiting } from '@polkadot/api-derive/staking/types';
-import { cmix_id_b64 } from "../cmix/index.js";
+import type { Balance, Era } from "@polkadot/types/interfaces/types.js";
+import type { PalletStakingValidatorPrefs, } from "@polkadot/types/lookup";
 
 const XX_SS58_PREFIX = 55;
 
