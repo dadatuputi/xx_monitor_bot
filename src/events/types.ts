@@ -1,0 +1,13 @@
+export enum XXEvent {
+    VALIDATOR_STATUS_CHANGE = "VALIDATOR_STATUS_CHANGE",
+    VALIDATOR_NAME_CHANGE = "VALIDATOR_NAME_CHANGE",
+    VALIDATOR_COMMISSION_CHANGE = "VALIDATOR_COMMISSION_CHANGE",
+    CLAIM_EXECUTED = "CLAIM_EXECUTED",
+    CLAIM_FAILED = "CLAIM_FAILED",
+}
+
+
+export interface NotifyData {
+    id: string,
+    msg: string | string[]
+}

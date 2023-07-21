@@ -5,10 +5,11 @@
   "description": "",
   "main": "built/index.js",
   "scripts": {
-    "start": "node built/index.js",
+    "start": "NODE_ENV=production node built/index.js",
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "dev": "NODE_ENV=development bash -c 'env-cmd npm run build && npm run start'"
+    "dev-start": "MONGO_CONTAINER_NAME=localhost node -r dotenv-expand/config built/index.js dotenv_config_path=./.env",
+    "dev": "npm run build && env $(grep NODE_EXTRA_CA_CERTS ./.env | cut -d '#' -f1 | xargs) NODE_ENV=development npm run dev-start"
   },
   "keywords": [],
   "author": "",
@@ -17,15 +18,19 @@
     "@commander-js/extra-typings": "^11.0.0",
     "@polkadot/api": "^9.14.2",
     "base64url": "^3.0.1",
+    "chalk": "^5.3.0",
     "cron": "^2.3.1",
+    "cronstrue": "^2.27.0",
     "discord.js": "^14.11.0",
     "moment": "^2.29.4",
-    "mongodb": "^4.11.0"
+    "mongodb": "^4.11.0",
+    "pubsub-js": "^1.9.4"
   },
   "devDependencies": {
     "@polkadot/types": "^9.14.2",
     "@types/cron": "^2.0.1",
     "@types/node": "^20.3.1",
+    "@types/pubsub-js": "^1.8.3",
     "@xxnetwork/types": "^1.0.4",
     "dotenv": "^16.0.3",
     "dotenv-expand": "^9.0.0",

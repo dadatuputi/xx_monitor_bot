@@ -1,5 +1,11 @@
-import { Events, ActivityType } from "discord.js";
-import { startPolling } from "../../cmix/index.js";
+import { Events, ActivityType, inlineCode } from "discord.js";
+import { Icons, prettify_address_alias } from "../../utils.js";
+import { Chain } from "../../chain/index.js";
+import { NotifyData, XXEvent } from "../../events/types.js";
+import { sendToChannel, sendToDM } from "../messager.js";
+import PubSub from 'pubsub-js';
+
+import type { CommissionChange } from "../../chain/types.js";
 import type { Database } from "../../db/index.js";
 import type { DiscordClient } from "../types.js";
 
@@ -22,7 +28,45 @@ export function execute(client: DiscordClient, db: Database) {
     });
   }
 
-  // start cmix poller
-  startPolling(db, client);
-  
+  // Subscribe to events
+  //  Validator Status Change
+  const validator_status_change: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
+    console.log('got it loud and clear beyotch')
+    data && sendToDM(client, data.id, data.msg)
+  }
+  PubSub.subscribe(XXEvent.VALIDATOR_STATUS_CHANGE, validator_status_change);
+
+  //  Validator Name Change
+  const validator_name_change: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
+    data && sendToDM(client, data.id, data.msg)
+  }
+  PubSub.subscribe(XXEvent.VALIDATOR_NAME_CHANGE, validator_name_change);
+
+  //  Validator Commission Change
+  const validator_commission_change: PubSubJS.SubscriptionListener<CommissionChange> = async (msg, data) => {
+    if (data) {
+      for(const record of await db.updateNodeCommission(data.cmix_id, data.commission)){
+        const commission_update = `${Chain.commissionToHuman(data.commission_previous, data.chain_decimals)}${Icons.TRANSIT}${Chain.commissionToHuman(data.commission, data.chain_decimals)}`
+        const retrows = new Array<string>();
+        retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(record.name, record.node, true)} commission ${data.commission_previous<data.commission? 'increased' : 'decreased'}: ${commission_update}`)
+        sendToDM(client, record.user, retrows);
+      }
+    }
+  }
+  PubSub.subscribe(XXEvent.VALIDATOR_COMMISSION_CHANGE, validator_commission_change)
+
+  //  Claim Executed
+  const claim_executed: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
+    data && sendToDM(client, data.id, data.msg);
+  }
+  PubSub.subscribe(XXEvent.CLAIM_EXECUTED, claim_executed)
+
+  //  Claim Failed
+  const claim_failed: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
+    if (process.env.ADMIN_NOTIFY_CHANNEL && data){
+      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, data.id, data.msg);
+      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data.msg);
+    }
+  }
+  PubSub.subscribe(XXEvent.CLAIM_FAILED, claim_failed)
 }
