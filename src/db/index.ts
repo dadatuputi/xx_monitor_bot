@@ -187,7 +187,7 @@ export class Database {
     }
     return result
   }
-
+ 
   public async updateNodeCommission(node_id: string, commission: number): Promise<MonitorRecord[]> {
     // notify any users monitoring the provided node of a status change
     const query: Filter<MonitorRecord> = {
@@ -246,7 +246,6 @@ export class Database {
     }
     return result
   }
-
   
   public async updateClaimAlias(wallet: string, new_alias: string): Promise<ClaimRecord[]> {
     // update all claims with the new alias, where user_set_alias = false
@@ -293,7 +292,7 @@ export class Database {
     return await this.monitor_state.find(query, options).toArray();
   }
 
-  public async listUserClaimsFlat(user_id: string): Promise<ClaimRecord[]> {
+  public async listUserClaims(user_id: string): Promise<ClaimRecord[]> {
     // Get list of user's subscriptions
 
     const query: Filter<ClaimRecord> = {
@@ -305,27 +304,6 @@ export class Database {
       },
     };
     return await this.claims.find(query, options).toArray();
-  }
-
-  public async listUserClaims(user_id: string): Promise<Map<string, ClaimRecord[]>> {
-    // Get list of user's subscriptions
-
-    const claims_map = new Map<string, ClaimRecord[]>();
-
-    for(const frequency of Object.values(ClaimFrequency)){
-      const query: Filter<ClaimRecord> = {
-        user: user_id,
-        frequency: frequency.key
-      };
-      const options: FindOptions<ClaimRecord> = {
-        projection: {
-          _id: false,
-        },
-      };
-      const results = await this.claims.find(query, options).toArray();
-      if (results.length) claims_map.set(frequency.key, results);
-    }
-    return claims_map;
   }
 
   public async deleteNode(user_id: string, node_id: string): Promise<[DeleteResult, WithId<MonitorRecord>[]]> {
