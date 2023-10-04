@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client, Collection, GatewayIntentBits } from "discord.js";
-import type { Database } from "../db/index.js";
+import type { Database } from "../../db/index.js";
 import type { DiscordClient } from "./types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,9 +18,7 @@ export async function initDiscord(db: Database, token: string): Promise<void> {
   client.commands = new Collection();
 
   const commandsPath = join(__dirname, "commands");
-  const commandFiles = fs
-    .readdirSync(commandsPath)
-    .filter((file) => file.endsWith(".js"));
+  const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith(".js"));
 
   // Build collection of available commands from the commands directory
   for (const file of commandFiles) {
@@ -32,7 +30,7 @@ export async function initDiscord(db: Database, token: string): Promise<void> {
       if ("data" in command && "execute" in command) {
         client.commands.set(command.data.name, command);
       } else {
-        throw new Error(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`)
+        throw new Error(`[WARNING] The command at ${filePath} was not loaded: missing a required "data" or "execute" property. Continuing`)
       }
     } catch (e) {
       console.log(e);

@@ -1,13 +1,14 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
-import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL, pluralize } from "../../utils.js";
-import { Chain, isValidXXAddress } from "../../chain/index.js";
-import { ClaimRecord } from "../../db/types.js";
-import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
-import { Claim } from "../../chain/claim.js";
+import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL, pluralize } from "../../../utils.js";
+import { Chain, isValidXXAddress } from "../../../chain/index.js";
+import { ClaimRecord } from "../../../db/types.js";
+import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../../chain/types.js";
+import { Claim } from "../../../chain/claim.js";
+import { Command } from "../../types.js";
 
 import type { DeleteResult, WithId } from "mongodb";
-import type { Database } from "../../db/index.js";
+import type { Database } from "../../../db/index.js";
 import type { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
 
@@ -16,11 +17,11 @@ import '../../env-guard/claim.js';
 import '../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()
-  .setName("claim")
-  .setDescription("Claim rewards for a validator or nominator wallet")
+  .setName(Command.CLAIM.name)
+  .setDescription(Command.CLAIM.description)
   .addSubcommand(subcommand =>
     subcommand 
-      .setName('daily')
+      .setName(Command.CLAIM.subcommands.get('daily'))
       .setDescription('Subscribe to daily payouts')
       .addStringOption((option) =>
       option

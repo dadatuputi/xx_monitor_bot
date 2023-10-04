@@ -2,7 +2,8 @@ import { startAllClaiming } from "./chain/claim.js";
 import { startListeningCommission } from "./chain/index.js";
 import { startPolling } from "./cmix/index.js";
 import { Database } from "./db/index.js";
-import { initDiscord } from "./discord/index.js";
+import { initDiscord } from "./bots/discord/index.js";
+import { initTelegram } from "./bots/telegram/index.js";
 
 var env = process.env.NODE_ENV || "development";
 console.log(`NODE_ENV: ${env}`);
@@ -28,6 +29,7 @@ startListeningCommission(process.env.CHAIN_RPC_ENDPOINT!);
 // start bots
 //  start discord.js
 await import('./env-guard/discord.js')
+console.log("Initializing Discord")
 initDiscord(db, process.env.DISCORD_TOKEN!);
 
 // discord/index.js: loads all the event handlers for discord
@@ -37,3 +39,6 @@ initDiscord(db, process.env.DISCORD_TOKEN!);
 //  compares it to the database of monitored nodes, and sends dms when
 //  node status changes have happened.
 
+//  start telegram
+console.log("Initializing Telegram")
+initTelegram(db, process.env.TELEGRAM_TOKEN!);
