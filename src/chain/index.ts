@@ -88,8 +88,10 @@ export class Chain{
       const me = await Chain.create(endpoint);
       console.log(`Connection successful`)
       await me.api!.disconnect()
-    } catch (e) {
-      console.log(`Could not connect to endpoint ${endpoint}: ${e}`)
+    } catch (e: unknown) {
+      let msg = `Could not connect to endpoint ${endpoint}`
+      if (e instanceof Error) msg += `: ${e.message}`
+      console.log(msg)
       return false;
     }
     return true;
