@@ -16,6 +16,20 @@ import type { CommissionChange } from "./types.js";
 
 const XX_SS58_PREFIX = 55;
 
+export async function testChain(): Promise<void> {
+  // test that we can connect to the provided endpoint except when deploying commands
+  let t = 5;
+  const MAX_MINS = 10
+  while (!process.env.BOT_DEPLOY && ! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) {
+    if (t > MAX_MINS * 60) throw new Error("Can't connect to chain, exiting");
+    const msg = `Can't connect to chain, waiting ${t}s`
+    console.log(msg)
+    PubSub.publish(XXEvent.LOG_ADMIN, msg)
+    await wait(t*1000);
+    t *= 2;
+  }
+}
+
 export function isValidXXAddress(address: string) : boolean {
   try {
     encodeAddress(
@@ -45,35 +59,44 @@ export class Chain{
     this.endpoint = endpoint;
   }
 
-  public async connect(): Promise<void> {
-    const provider = new WsProvider(this.endpoint);
+  public async connect(): Promise<boolean> {
+    const provider = new WsProvider(this.endpoint, 5000);
     const options = {
       derives: custom, 
       provider: provider,
       throwOnConnect: true,
     }    
-    const api = await ApiPromise.create(options);
-    await api.isReady;
 
-    this.decimals = api.registry.chainDecimals[0];
+    try {
+      const api = await ApiPromise.create(options);
+      await api.isReadyOrError
 
-    // ensure chain is syncronized; from https://github.com/xx-labs/exchange-integration/blob/a027526819fdcfd4145fd45b7ceeeaaf371ebcf2/detect-transfers/index.js#L33
-    while((await api.rpc.system.health()).isSyncing.isTrue){
-      const sec = 5;
-      console.log(`Chain is syncing, waiting ${sec} seconds`);
-      await wait(sec*1000);
-    }
+      this.decimals = api.registry.chainDecimals[0];
 
-    const [chain, nodeName, nodeVersion, era] = await Promise.all([
-      api.rpc.system.chain(),
-      api.rpc.system.name(),
-      api.rpc.system.version(),
-      api.query.staking.activeEra()
-    ]);
-  
-    console.log(`Connected to chain ${chain} using ${nodeName} v${nodeVersion}, era: ${(era.toJSON() as unknown as Era).index}`);
+      // ensure chain is syncronized; from https://github.com/xx-labs/exchange-integration/blob/a027526819fdcfd4145fd45b7ceeeaaf371ebcf2/detect-transfers/index.js#L33
+      while((await api.rpc.system.health()).isSyncing.isTrue){
+        const sec = 5;
+        console.log(`Chain is syncing, waiting ${sec} seconds`);
+        await wait(sec*1000);
+      }
+
+      const [chain, nodeName, nodeVersion, era] = await Promise.all([
+        api.rpc.system.chain(),
+        api.rpc.system.name(),
+        api.rpc.system.version(),
+        api.query.staking.activeEra()
+      ]);
     
-    this.api = api;
+      console.log(`Connected to chain ${chain} using ${nodeName} v${nodeVersion}, era: ${(era.toJSON() as unknown as Era).index}`);
+      
+      this.api = api;
+
+    } catch(e) {
+      provider.disconnect();
+      return false; 
+    }    
+
+    return true;
   }
   
   public static async create(endpoint: string) {
@@ -83,18 +106,10 @@ export class Chain{
   }
 
   public static async test(endpoint: string): Promise<boolean> {
-    try {
-      console.log(`Testing rpc connection to ${endpoint}...`)
-      const me = await Chain.create(endpoint);
-      console.log(`Connection successful`)
-      await me.api!.disconnect()
-    } catch (e: unknown) {
-      let msg = `Could not connect to endpoint ${endpoint}`
-      if (e instanceof Error) msg += `: ${e.message}`
-      console.log(msg)
-      return false;
-    }
-    return true;
+    const guinea = new Chain(endpoint);
+    const alive = await guinea.connect()
+    alive && guinea.api!.disconnect()
+    return alive;
   }
 
   public async wallet_balance(wallet: string | KeyringPair): Promise<BN> {

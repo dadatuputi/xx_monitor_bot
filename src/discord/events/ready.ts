@@ -68,7 +68,7 @@ export function execute(client: DiscordClient, db: Database) {
 
   // Log admin events to admin channel
   const logAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
-    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data);
+    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, ["__Admin Log:__"].concat(data));
   }
   PubSub.subscribe(XXEvent.LOG_ADMIN, logAdmin);
 

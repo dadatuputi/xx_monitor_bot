@@ -1,8 +1,10 @@
 import { startAllClaiming } from "./chain/claim.js";
-import { startListeningCommission } from "./chain/index.js";
+import { startListeningCommission, testChain } from "./chain/index.js";
 import { startPolling } from "./cmix/index.js";
 import { Database } from "./db/index.js";
 import { initDiscord } from "./discord/index.js";
+import { XXEvent } from "./events/types.js";
+import PubSub from 'pubsub-js';
 
 var env = process.env.NODE_ENV || "development";
 console.log(`NODE_ENV: ${env}`);
@@ -25,6 +27,7 @@ const db: Database = await Database.connect(process.env.MONGO_URI);
 // start chain listener
 (async () => {
     await import('./env-guard/claim.js')
+    await testChain()
     startAllClaiming(db, process.env.CHAIN_RPC_ENDPOINT!);
     startListeningCommission(process.env.CHAIN_RPC_ENDPOINT!);
   }
@@ -32,10 +35,15 @@ const db: Database = await Database.connect(process.env.MONGO_URI);
 
 
 // start bots
-//  start discord.js
 (async () => {
-    await import('./env-guard/discord.js')
-    initDiscord(db, process.env.DISCORD_TOKEN!);
+    //  start discord.js
+    (async () => {
+      await import('./env-guard/discord.js')
+      initDiscord(db, process.env.DISCORD_TOKEN!); 
+    })();
+
+    // todo: start telegram
+
   }
 )();  
 

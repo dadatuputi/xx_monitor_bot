@@ -5,7 +5,7 @@ import { BN } from "@polkadot/util";
 import { CronJob } from "cron";
 import { codeBlock, spoiler } from "discord.js";
 import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize, engulph_fetch_claimers, EXTERNAL, wait } from "../utils.js";
-import { Chain } from "./index.js";
+import { Chain, testChain } from "./index.js";
 import { ClaimFrequency } from "./types.js";
 import { NotifyData, XXEvent } from "../events/types.js";
 import chalk from 'chalk';
@@ -29,16 +29,6 @@ import type {
 
 // env guard
 import '../env-guard/claim.js'
-
-// test that we can connect to the provided endpoint except when deploying commands
-let t = 5;
-const MAX_MINS = 10
-while (!process.env.BOT_DEPLOY && ! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) {
-  if (t > MAX_MINS * 60) throw new Error("Can't connect to chain, exiting");
-  PubSub.publish(XXEvent.LOG_ADMIN, `Can't connect to chain, waiting ${t}s`)
-  await wait(t*1000);
-  t *= 2;
-}
 
 export async function startAllClaiming(
   db: Database,

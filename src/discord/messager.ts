@@ -1,5 +1,5 @@
 import { DiscordAPIError } from "discord.js";
-import { XXEvent } from "../events/types";
+import { XXEvent } from "../events/types.js";
 
 import type { Client, TextChannel} from "discord.js";
 
