@@ -31,7 +31,6 @@ export function execute(client: DiscordClient, db: Database) {
   // Subscribe to events
   //  Validator Status Change
   const validator_status_change: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
-    console.log('got it loud and clear beyotch')
     data && sendToDM(client, data.id, data.msg)
   }
   PubSub.subscribe(XXEvent.VALIDATOR_STATUS_CHANGE, validator_status_change);
@@ -63,10 +62,14 @@ export function execute(client: DiscordClient, db: Database) {
 
   //  Claim Failed
   const claim_failed: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
-    if (process.env.ADMIN_NOTIFY_CHANNEL && data){
-      if (process.env.ADMIN_NOTIFY_CHANNEL.toLowerCase() === 'dm') sendToDM(client, data.id, data.msg);
-      else sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data.msg);
-    }
+    data && PubSub.publish(XXEvent.LOG_ADMIN, data.msg);
   }
   PubSub.subscribe(XXEvent.CLAIM_FAILED, claim_failed)
+
+  // Log admin events to admin channel
+  const logAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
+    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data);
+  }
+  PubSub.subscribe(XXEvent.LOG_ADMIN, logAdmin);
+
 }
