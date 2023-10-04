@@ -3,9 +3,9 @@
 import "@xxnetwork/types";
 import { BN } from "@polkadot/util";
 import { CronJob } from "cron";
-import { codeBlock, inlineCode, spoiler } from "discord.js";
-import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize, engulph_fetch_claimers, EXTERNAL } from "../utils.js";
-import { Chain } from "./index.js";
+import { codeBlock, spoiler } from "discord.js";
+import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize, engulph_fetch_claimers, EXTERNAL, wait } from "../utils.js";
+import { Chain, testChain } from "./index.js";
 import { ClaimFrequency } from "./types.js";
 import { NotifyData, XXEvent } from "../events/types.js";
 import chalk from 'chalk';
@@ -29,9 +29,6 @@ import type {
 
 // env guard
 import '../env-guard/claim.js'
-
-// test that we can connect to the provided endpoint except when deploying commands
-if (!process.env.BOT_DEPLOY && ! await Chain.test(process.env.CHAIN_RPC_ENDPOINT!)) throw new Error("Can't connect to chain, exiting");
 
 export async function startAllClaiming(
   db: Database,
@@ -118,8 +115,9 @@ export class Claim {
     }
   }
 
-  public log(...msg: unknown[]){
+  public log(...msg: string[]){
     console.log(this._log_color(this._prefix, "\t", msg));
+    PubSub.publish(XXEvent.LOG_ADMIN, msg)
   }
 
   public static async create(db: Database, chain: Chain, cfg: ClaimConfig, external?: ExternalStakerConfig) {
@@ -228,8 +226,9 @@ export class Claim {
 
   
       return claimer_rewards_available;
-    } catch (e) {
-      this.log(e);
+    } catch (e:unknown) {
+      if (e instanceof Error) this.log(e.message);
+      else if (typeof e === 'string') this.log(e);
       throw new Error("Failed getting staking rewards");
     }
   }

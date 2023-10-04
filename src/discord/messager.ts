@@ -1,4 +1,7 @@
-import type { Client, TextChannel } from "discord.js";
+import { DiscordAPIError } from "discord.js";
+import { XXEvent } from "../events/types.js";
+
+import type { Client, TextChannel} from "discord.js";
 
 const MAX_MESSAGE_SIZE = 2000;
 
@@ -31,11 +34,26 @@ function chunkString(str: string | string[], size: number = MAX_MESSAGE_SIZE): s
 export async function sendToDM(client: Client, user_id: string, message: string | string[]): Promise<any> {
   const chunks = chunkString(message);
 
-  client.users.fetch(user_id).then((dm) => {
-    for(const chunk of chunks) {
-      dm.send(chunk);
+  try {
+    client.users.fetch(user_id).then((dm) => {
+      for(const chunk of chunks) {
+        dm.send(chunk);
+      }
+    });
+  }
+  catch (e:unknown) {
+    let msg = `sendToDM Error; User: ${user_id}; Message: ${message}\n`
+    if (e instanceof DiscordAPIError) {
+      msg += `DiscordAPIError ${e.code}: ${e.message}`
+    } else if (e instanceof Error) {
+      msg += `Error ${e.name}: ${e.message}`
+    } else {
+      msg += e
     }
-  });
+    console.log(msg);
+    PubSub.publish(XXEvent.LOG_ADMIN, msg)
+  }
+  
 }
 
 export async function sendToChannel(client: Client, channel: string, message: string | string[]): Promise<any> {

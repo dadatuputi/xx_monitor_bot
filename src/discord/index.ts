@@ -56,5 +56,5 @@ export async function initDiscord(db: Database, token: string): Promise<void> {
   }
 
   // Log in to Discord with your client's token
-  client.login(token);
+  await client.login(token);
 }

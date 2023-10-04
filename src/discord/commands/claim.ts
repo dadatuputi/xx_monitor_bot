@@ -1,6 +1,6 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
-import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL } from "../../utils.js";
+import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL, pluralize } from "../../utils.js";
 import { Chain, isValidXXAddress } from "../../chain/index.js";
 import { ClaimRecord } from "../../db/types.js";
 import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../chain/types.js";
@@ -168,7 +168,9 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
 
     case "list": {
       // Get a list of user's subscribed wallets
-      const wallets: Map<string, ClaimRecord[]> = await db.listUserClaims(user.id);
+      const claims = await db.listUserClaims(user.id);
+      const freqs = claims.reduce( (acc, claim) => acc.add(claim.frequency),new Set<string>());
+      const wallets = Array.from(freqs).reduce<Map<string, ClaimRecord[]>>( (acc, freq) => acc.set(freq, claims.filter( (claim) => claim.frequency === freq)), new Map<string, ClaimRecord[]>());
 
       // User isn't subscribed for any wallets
       if (wallets.size <= 0) {
@@ -176,9 +178,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
       } else {
         // Print a list of nodes
         wallets.forEach( (claims, frequency) => {
-          reply_string += `You are subscribed to _${frequency}_ payouts for ${claims.length} wallet${
-            claims.length > 1 ? "s" : ""
-          }:\n`;
+          reply_string += `You are subscribed to _${frequency}_ payouts for ${pluralize(claims, 'wallet')}:\n`;
           claims.forEach((claim) => {
             const url = `${process.env.EXPLORER_URL}/${claim.wallet}`;
             const amount = claim.last_amount ? ` ${claim.last_amount} ` : ' ';
@@ -232,7 +232,7 @@ export async function autocomplete(
   const focusedValue = interaction.options.getFocused();
 
   // Get list of nodes monitored from db
-  const monitored_nodes = await db.listUserClaimsFlat(user.id);
+  const monitored_nodes = await db.listUserClaims(user.id);
   const choices = monitored_nodes.map((entry) => ({
     id: entry.wallet,
     text: `${prettify_address_alias(entry.alias, entry.wallet, false)}`,
