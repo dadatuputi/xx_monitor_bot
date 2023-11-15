@@ -88,8 +88,6 @@ async function poll(db: Database, api_endpoint: string) {
             id: record.user,
             msg: message,
           }
-          console.log('pubing this sub')
-          console.log(data)
           PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE, data)
         }
       });
