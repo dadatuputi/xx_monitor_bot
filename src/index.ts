@@ -3,8 +3,6 @@ import { startListeningCommission, testChain } from "./chain/index.js";
 import { startPolling } from "./cmix/index.js";
 import { Database } from "./db/index.js";
 import { initDiscord } from "./discord/index.js";
-import { XXEvent } from "./events/types.js";
-import PubSub from 'pubsub-js';
 
 var env = process.env.NODE_ENV || "development";
 console.log(`NODE_ENV: ${env}`);

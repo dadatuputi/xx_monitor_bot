@@ -353,4 +353,33 @@ export class Database {
       alias: value.alias
     }));
   }
+
+  public async deleteUser(user_id: string) {
+    // Delete all the user's monitors and claims
+
+    const query_monitors: Filter<MonitorRecord> = {
+      user: user_id,
+    };
+    const options_monitors: FindOptions<MonitorRecord> = {};
+    const deleted_monitors: WithId<MonitorRecord>[] = await this.monitor_state.find(query_monitors, options_monitors).toArray();
+    const result_monitors: DeleteResult = await this.monitor_state.deleteMany(query_monitors, options_monitors);
+
+    const query_claims: Filter<ClaimRecord> = {
+      user: user_id,
+    };
+    const options_claims: FindOptions<ClaimRecord> = {};
+    const deleted_claims: WithId<ClaimRecord>[] = await this.claims.find(query_claims, options_claims).toArray();
+    const result_claims: DeleteResult = await this.claims.deleteMany(query_claims, options_claims);
+
+    return { 
+      monitors: {
+        result: result_monitors,
+        deleted: deleted_monitors,
+      },
+      claims: {
+        result: result_claims,
+        deleted: deleted_claims,
+      }
+    }
+  }
 }
