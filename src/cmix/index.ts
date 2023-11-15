@@ -28,7 +28,10 @@ export async function startPolling(db: Database, api_endpoint: string, cmix_cron
 async function poll(db: Database, api_endpoint: string) {
   try {
     const response: Response = await fetch(api_endpoint, {
-      headers: { accept: "application/json; charset=utf-8" },
+      "headers": { 
+        "Accept": "application/json; charset=utf-8",
+        "User-Agent": "Wget/1.21.3",
+       },
     });
     const results = await response.json() as {nodes: CmixNode[]};
     if (response.status !== 200) {
