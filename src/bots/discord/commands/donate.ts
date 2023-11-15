@@ -1,14 +1,14 @@
 import { SlashCommandBuilder, bold, italic, inlineCode } from "discord.js";
-import { Chain } from "../../chain/index.js";
+import { Chain } from "../../../chain/index.js";
 
 import type { ChatInputCommandInteraction } from "discord.js";
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
-import type { Database } from "../../db/index.js";
+import type { Database } from "../../../db/index.js";
 
 // env guard
-import '../../env-guard/donate.js';
-import '../../env-guard/claim.js';
-import '../../env-guard/discord.js';
+import '../../../env-guard/donate.js';
+import '../../../env-guard/claim.js';
+import '../../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName("donate")

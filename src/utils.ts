@@ -16,9 +16,12 @@ export enum Icons {
   EXTERNAL = "🌐",
   CMIX = "🖧",
   DIAMOND = "💎",
+  ADD = "➕",
 }
 
 export const XX_ID_LEN = 44;
+
+export const base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/; // https://stackoverflow.com/a/35002237/1486966
 
 const ADDRESS_ALIAS_MIN_ID: number = 5; // the minimum length for an ID
 const ADDRESS_ALIAS_SEPARATOR: string = " / ";

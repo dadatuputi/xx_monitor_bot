@@ -14,6 +14,7 @@ if (env === "development") {
 // // initialize database
 if (!process.env.MONGO_URI) { throw new Error('Missing env var MONGO_URI, exiting') }
 const db: Database = await Database.connect(process.env.MONGO_URI);
+db.update_bot_column() // add bot column to old dbs - will eventually remove
 
 // start cmix cron
 // todo - consolidate /monitor commands into single command, then handle command loading like claim i.e. throw error when env vars aren't available. 
@@ -29,7 +30,6 @@ startListeningCommission(process.env.CHAIN_RPC_ENDPOINT!);
 // start bots
 //  start discord.js
 await import('./env-guard/discord.js')
-console.log("Initializing Discord")
 initDiscord(db, process.env.DISCORD_TOKEN!);
 
 // discord/index.js: loads all the event handlers for discord
@@ -40,5 +40,4 @@ initDiscord(db, process.env.DISCORD_TOKEN!);
 //  node status changes have happened.
 
 //  start telegram
-console.log("Initializing Telegram")
 initTelegram(db, process.env.TELEGRAM_TOKEN!);

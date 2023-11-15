@@ -8,7 +8,7 @@ export interface RecordUpdate {
 }
 
 export interface ClaimRecord extends OptionalId<Document> {
-  user: string; // discord_id
+  user: string; // unique chat client user id
   wallet: string; // wallet address
   frequency: string; // how often to claim
   alias?: string | null; // wallet name
@@ -18,7 +18,7 @@ export interface ClaimRecord extends OptionalId<Document> {
 }
 
 export interface MonitorRecord extends OptionalId<Document> {
-  user: string; // discord_id
+  user: string; // unique chat client user id
   node: string; // node_id
   name: string | null; // node_name
   user_set_name: boolean; // true if user set the name, false otherwise

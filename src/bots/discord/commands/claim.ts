@@ -13,16 +13,16 @@ import type { AutocompleteInteraction, ChatInputCommandInteraction } from "disco
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
 
 // env guard
-import '../../env-guard/claim.js';
-import '../../env-guard/discord.js';
+import '../../../env-guard/claim.js';
+import '../../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName(Command.CLAIM.name)
   .setDescription(Command.CLAIM.description)
   .addSubcommand(subcommand =>
     subcommand 
-      .setName(Command.CLAIM.subcommands.get('daily'))
-      .setDescription('Subscribe to daily payouts')
+      .setName("daily")
+      .setDescription("Subscribe to daily payouts")
       .addStringOption((option) =>
       option
         .setName("wallet")

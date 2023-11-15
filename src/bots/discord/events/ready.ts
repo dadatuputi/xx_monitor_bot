@@ -1,19 +1,19 @@
 import { Events, ActivityType, inlineCode } from "discord.js";
-import { Icons, prettify_address_alias } from "../../utils.js";
-import { Chain } from "../../chain/index.js";
-import { NotifyData, XXEvent } from "../../events/types.js";
+import { Icons, prettify_address_alias } from "../../../utils.js";
+import { Chain } from "../../../chain/index.js";
+import { NotifyData, XXEvent } from "../../../events/types.js";
 import { sendToChannel, sendToDM } from "../messager.js";
 import PubSub from 'pubsub-js';
 
-import type { CommissionChange } from "../../chain/types.js";
-import type { Database } from "../../db/index.js";
+import type { CommissionChange } from "../../../chain/types.js";
+import type { Database } from "../../../db/index.js";
 import type { DiscordClient } from "../types.js";
 
 export const name = Events.ClientReady;
 export const once = true;
 
 export function execute(client: DiscordClient, db: Database) {
-  console.log(`Ready! Logged in as ${client.user!.tag}`);
+  console.log(`Discord bot ready: ${client.user!.tag}`);
 
   // configure client with info from env
   // Set bot username

@@ -14,6 +14,7 @@ import type {
   Collection,
 } from "mongodb";
 import type { ClaimRecord, LogActionRecord, MonitorRecord, RecordUpdate } from "./types.js";
+import { BotType } from "../bots/types.js";
 
 
 export class Database {
@@ -38,6 +39,30 @@ export class Database {
     const client = await MongoClient.connect(uri);
     console.log(`Connected to mongo at ${uri}`);
     return new Database(client);
+  }
+
+  public async update_bot_column(): Promise<number> {
+    // Update database if there is no `bot` column - eventually remove
+    const query: Filter<MonitorRecord> = {
+      bot: null,
+    };
+    const options: FindOptions<MonitorRecord> = {
+      projection: {
+        _id: false,
+      },
+    };
+    const result: MonitorRecord[] = await this.monitor_state.find(query, options).toArray();
+
+    if (result.length) {
+      // update the value in the database
+      const update: UpdateFilter<MonitorRecord> = {
+        $set: {
+          bot: BotType.DISCORD,
+        },
+      };
+      this.monitor_state.updateMany(query, update);
+    }
+    return result.length;
   }
 
   public async logAction(
@@ -278,11 +303,12 @@ export class Database {
     return result
   }
 
-  public async listUserNodes(user_id: string): Promise<MonitorRecord[]> {
+  public async listUserNodes(user_id: string, bot_type: BotType): Promise<MonitorRecord[]> {
     // Get list of user's subscriptions
 
     const query: Filter<MonitorRecord> = {
       user: user_id,
+      bot: bot_type
     };
     const options: FindOptions<MonitorRecord> = {
       projection: {

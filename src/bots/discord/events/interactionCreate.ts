@@ -1,6 +1,6 @@
 import { Events } from "discord.js";
 import type { CommandInteraction } from "discord.js";
-import type { Database } from "../../db/index.js";
+import type { Database } from "../../../db/index.js";
 import type { DiscordClient } from "../types.js";
 
 export const name = Events.InteractionCreate;

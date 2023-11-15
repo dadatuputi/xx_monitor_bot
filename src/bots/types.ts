@@ -1,6 +1,6 @@
 export enum BotType {
-    DISCORD, "user",
-    TELEGRAM, "user_telegram"
+    DISCORD = "discord",
+    TELEGRAM = "telegram",
 }
 
 interface CommandDefinition {

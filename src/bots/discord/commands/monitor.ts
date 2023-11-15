@@ -1,15 +1,16 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError, italic } from "discord.js";
-import { prettify_address_alias, Icons, XX_ID_LEN } from "../../utils.js";
+import { prettify_address_alias, Icons, XX_ID_LEN } from "../../../utils.js";
 import base64url from "base64url";
 
-import type { Database } from "../../db/index.js";
+import type { Database } from "../../../db/index.js";
 import type { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
-import { Status, StatusIcon } from "../../cmix/types.js";
+import { BotType } from "../../types.js";
+import { Status, StatusIcon } from "../../../cmix/types.js";
 
 // env guard
-import '../../env-guard/monitor.js';
-import '../../env-guard/discord.js';
+import '../../../env-guard/monitor.js';
+import '../../../env-guard/discord.js';
 
 
 export const data = new SlashCommandBuilder()
@@ -134,7 +135,7 @@ export async function autocomplete(interaction: AutocompleteInteraction, db: Dat
   const focusedValue = interaction.options.getFocused();
 
   // Get list of nodes monitored from db
-  const monitored_nodes = await db.listUserNodes(user.id);
+  const monitored_nodes = await db.listUserNodes(user.id, BotType.DISCORD);
   const choices = monitored_nodes.map((entry) => ({
     id: entry.node,
     text: `${prettify_address_alias(entry.name, entry.node, false)}`,
@@ -150,7 +151,7 @@ export async function autocomplete(interaction: AutocompleteInteraction, db: Dat
 
 async function buildResponseText(db: Database, id: string) {
   // Get a list of user's monitored nodes
-  const nodes = await db.listUserNodes(id);
+  const nodes = await db.listUserNodes(id, BotType.DISCORD);
 
   // User isn't monitoring any nodes
   if (nodes.length <= 0) return `${Icons.ERROR}  You aren't monitoring any nodes.`

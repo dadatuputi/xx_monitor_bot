@@ -34,7 +34,7 @@ async function init_client(): Promise<DiscordClient> {
     intents: [GatewayIntentBits.Guilds],
   }) as DiscordClient;
   client.once(Events.ClientReady, (...args) => {
-    console.log(`Ready! Logged in as ${client.user!.tag}`);
+    console.log(`Discord ready: ${client.user!.tag}`);
   });
 
   await client.login(process.env.DISCORD_TOKEN);
