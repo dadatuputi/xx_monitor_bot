@@ -12,6 +12,9 @@ import type { CmixNode } from './types.js'
 // Polls the dashboard API and gets the entire list of nodes per the CMIX_CRON schedule
 
 export async function startPolling(db: Database, api_endpoint: string, cmix_cron: string) {
+  // Start a poll immediately on start-up
+  await poll(db, api_endpoint);
+
   const job = new CronJob(
     cmix_cron,
     function () {
@@ -25,18 +28,24 @@ export async function startPolling(db: Database, api_endpoint: string, cmix_cron
   console.log(`*** cMix Cron Started: ${cronstrue.toString(cmix_cron)}; next run: ${job.nextDate().toRFC2822()} ***`);
 }
 
+let poll_success = false;
+
 async function poll(db: Database, api_endpoint: string) {
   try {
     const response: Response = await fetch(api_endpoint, {
       "headers": { 
         "Accept": "application/json; charset=utf-8",
-        "User-Agent": "Wget/1.21.3",
+        "User-Agent": "xxbot",
        },
     });
-    const results = await response.json() as {nodes: CmixNode[]};
+
     if (response.status !== 200) {
-      console.log(`Non-200 response:\nresponse: ${response}\nbody: ${results}}`);
-    } else {
+      throw new Error(`Non-200 response:\nresponse: ${response}\nbody: ${await response.text()}}`);
+    }
+
+    try {
+      const results = await response.json() as {nodes: CmixNode[]};
+      
       // Process the results
       console.log(`${Icons.CMIX}  Parsing ${results.nodes.length} cMix nodes`);
   
@@ -62,17 +71,19 @@ async function poll(db: Database, api_endpoint: string) {
             PubSub.publish(XXEvent.VALIDATOR_NAME_CHANGE, data)
           }
 
-          const claim_results = await db.updateClaimAlias(node.walletAddress, name);
-          claim_results.length && console.log(`Notifying ${claim_results.length} claimers of validator ${node.walletAddress} of name change to ${node.name}`);
-          for(const record of claim_results){
-            const retrows = new Array<string>();
-            retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, node.walletAddress, true, 48)} alias updated: ${inlineCode(record.name ? record.name : 'empty')}${Icons.TRANSIT}${inlineCode(node.name)}`)
-            retrows.push(`${Icons.UPDATE} ${spoiler(inlineCode(`Use command /claim to set your own alias and stop name updates from the dashboard`))}`)
-            const data: NotifyData = {
-              id: record.user,
-              msg: retrows,
+          if (node.walletAddress) {
+            const claim_results = await db.updateClaimAlias(node.walletAddress, name);
+            claim_results.length && console.log(`Notifying ${claim_results.length} claimers of validator ${node.walletAddress} of name change to ${node.name}`);
+            for(const record of claim_results){
+              const retrows = new Array<string>();
+              retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, node.walletAddress, true, 48)} alias updated: ${inlineCode(record.name ? record.name : 'empty')}${Icons.TRANSIT}${inlineCode(node.name)}`)
+              retrows.push(`${Icons.UPDATE} ${spoiler(inlineCode(`Use command /claim to set your own alias and stop name updates from the dashboard`))}`)
+              const data: NotifyData = {
+                id: record.user,
+                msg: retrows,
+              }
+              PubSub.publish(XXEvent.VALIDATOR_NAME_CHANGE, data)
             }
-            PubSub.publish(XXEvent.VALIDATOR_NAME_CHANGE, data)
           }
         }
 
@@ -91,9 +102,17 @@ async function poll(db: Database, api_endpoint: string) {
           PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE, data)
         }
       });
+
+      poll_success = true;
+    } catch(e) {
+      throw new Error(`Response: ${await response.text()}`);
     }
+
   } catch(e) {
-    console.log(`Error during cmix poll: ${e}`)
+    const error = `Error during cmix poll (API: ${api_endpoint}): ${e}`
+    console.log(error)
+    poll_success && PubSub.publish(XXEvent.LOG_ADMIN, error)
+    poll_success = false;
   }
  
 }
