@@ -72,4 +72,8 @@ export function execute(client: DiscordClient, db: Database) {
   }
   PubSub.subscribe(XXEvent.LOG_ADMIN, logAdmin);
 
+
+
+  // Notify on startup
+  PubSub.publish(XXEvent.LOG_ADMIN, "Discord bot started")
 }
