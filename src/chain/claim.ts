@@ -94,6 +94,7 @@ export class Claim {
   private price: number | undefined;
   private era_claims: EraClaim[] = [];
   private is_prepared: boolean = false;
+  private claim_log: Array<string> = [];
   private _log_color: ChalkInstance;
   private _prefix: string;
   private static _log_color_gen = Claim.log_color_gen()
@@ -117,7 +118,7 @@ export class Claim {
 
   public log(...msg: string[]){
     console.log(this._log_color(this._prefix, "\t", msg));
-    PubSub.publish(XXEvent.LOG_ADMIN, msg)
+    this.claim_log.push(...msg)
   }
 
   public static async create(db: Database, chain: Chain, cfg: ClaimConfig, external?: ExternalStakerConfig) {
@@ -180,6 +181,8 @@ export class Claim {
     // disconnect
     this.log(`Disconnecting from ${this.chain.endpoint}`)
     this.chain.api.disconnect();
+
+    PubSub.publish(XXEvent.LOG_ADMIN, this.claim_log)
   }
 
   private async get_available_rewards(stakers: Staker[]): Promise<StakerRewardsAvailable[]> {

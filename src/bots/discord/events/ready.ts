@@ -31,13 +31,13 @@ export function execute(client: DiscordClient, db: Database) {
   // Subscribe to events
   //  Validator Status Change
   const validator_status_change: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
-    data && sendToDM(client, data.id, data.msg)
+    data && sendToDM(client, db, data.id, data.msg)
   }
   PubSub.subscribe(XXEvent.VALIDATOR_STATUS_CHANGE, validator_status_change);
 
   //  Validator Name Change
   const validator_name_change: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
-    data && sendToDM(client, data.id, data.msg)
+    data && sendToDM(client, db, data.id, data.msg)
   }
   PubSub.subscribe(XXEvent.VALIDATOR_NAME_CHANGE, validator_name_change);
 
@@ -48,7 +48,7 @@ export function execute(client: DiscordClient, db: Database) {
         const commission_update = `${Chain.commissionToHuman(data.commission_previous, data.chain_decimals)}${Icons.TRANSIT}${Chain.commissionToHuman(data.commission, data.chain_decimals)}`
         const retrows = new Array<string>();
         retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(record.name, record.node, true)} commission ${data.commission_previous<data.commission? 'increased' : 'decreased'}: ${commission_update}`)
-        sendToDM(client, record.user, retrows);
+        sendToDM(client, db, record.user, retrows);
       }
     }
   }
@@ -56,7 +56,7 @@ export function execute(client: DiscordClient, db: Database) {
 
   //  Claim Executed
   const claim_executed: PubSubJS.SubscriptionListener<NotifyData> = (msg, data) => {
-    data && sendToDM(client, data.id, data.msg);
+    data && sendToDM(client, db, data.id, data.msg);
   }
   PubSub.subscribe(XXEvent.CLAIM_EXECUTED, claim_executed)
 
@@ -68,8 +68,12 @@ export function execute(client: DiscordClient, db: Database) {
 
   // Log admin events to admin channel
   const logAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
-    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, ["__Admin Log:__"].concat(data));
+    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data);
   }
   PubSub.subscribe(XXEvent.LOG_ADMIN, logAdmin);
 
+
+
+  // Notify on startup
+  PubSub.publish(XXEvent.LOG_ADMIN, "Discord bot started")
 }
