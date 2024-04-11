@@ -1,13 +1,14 @@
 import { CronJob } from "cron";
 import { Database } from "../db/index.js";
 import { Icons, prettify_address_alias } from "../utils.js";
-import { StatusCmix, Status, StatusIcon } from "./types.js";
-import { inlineCode, italic, spoiler } from "discord.js";
+import { StatusCmix, } from "./types.js";
+import { inlineCode, spoiler } from "discord.js";
 import { NotifyData, XXEvent } from "../events/types.js";
 import cronstrue from "cronstrue";
 import PubSub from 'pubsub-js';
 
 import type { CmixNode } from './types.js'
+import { BotType } from "../bots/types.js";
 
 // Polls the dashboard API and gets the entire list of nodes per the CMIX_CRON schedule
 
@@ -93,13 +94,14 @@ async function poll(db: Database, api_endpoint: string) {
         for(const record of status_results) {
           console.log(record)
           // Send a notification to the user
-          var message = `${StatusIcon[record.status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[status_new.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
-          message += `  ${prettify_address_alias(record.name, record.node)} is now ${status_new == Status.ERROR ? "in " : ""}${italic(status_new)}`; // new status
-          const data: NotifyData = {
-            id: record.user,
-            msg: message,
+          switch (record.bot) {
+            case BotType.DISCORD:
+              PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE_DISCORD, {status_new: status_new, data: record})
+              break;
+            case BotType.TELEGRAM:
+              PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE_TELEGRAM, {status_new: status_new, data: record})
+              break;
           }
-          PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE, data)
         }
       });
 

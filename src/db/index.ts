@@ -85,13 +85,14 @@ export class Database {
     return result;
   }
 
-  public async addNode(user_id: string, node_id: string, node_name: string | null): Promise<InsertOneResult<MonitorRecord> | UpdateResult | undefined> {
+  public async addNode(user_id: string, bot_type: BotType, node_id: string, node_name: string | null): Promise<InsertOneResult<MonitorRecord> | UpdateResult | undefined> {
     // Add a node to the monitered node list
 
     // check if user is already monitoring this node
     const query: Filter<MonitorRecord> = {
       user: user_id,
       node: node_id,
+      bot: bot_type
     };
     const options: FindOptions<MonitorRecord> = {};
     const result: WithId<MonitorRecord> | null = await this.monitor_state.findOne(query, options);
@@ -116,6 +117,7 @@ export class Database {
       const new_doc: MonitorRecord = {
         user: user_id,
         node: node_id,
+        bot: bot_type,
         name: node_name,
         user_set_name: Boolean(node_name),
         status: Status.UNKNOWN,
@@ -332,11 +334,12 @@ export class Database {
     return await this.claims.find(query, options).toArray();
   }
 
-  public async deleteNode(user_id: string, node_id: string): Promise<[DeleteResult, WithId<MonitorRecord>[]]> {
+  public async deleteNode(user_id: string, bot_type: BotType, node_id: string): Promise<[DeleteResult, WithId<MonitorRecord>[]]> {
     // Delete the given node from the user record.
 
     const query: Filter<MonitorRecord> = {
       user: user_id,
+      bot: bot_type,
       node: node_id,
     };
     const options: FindOptions<MonitorRecord> = {};

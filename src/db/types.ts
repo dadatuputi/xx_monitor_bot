@@ -20,6 +20,7 @@ export interface ClaimRecord extends OptionalId<Document> {
 export interface MonitorRecord extends OptionalId<Document> {
   user: string; // unique chat client user id
   node: string; // node_id
+  bot: string; // bot_type
   name: string | null; // node_name
   user_set_name: boolean; // true if user set the name, false otherwise
   status: string; // based on status object below,

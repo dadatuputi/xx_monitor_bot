@@ -1,4 +1,4 @@
-import { Bot, Context, session } from "grammy";
+import { Bot, Context, RawApi, session } from "grammy";
 import { Database } from '../../db';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,14 @@ import {
     createConversation,
   } from "@grammyjs/conversations";
 
-import type { TelegramCommand, XXContext, XXConversation } from './types';
+import PubSub from 'pubsub-js';
+
+
+import type { TelegramCommand, XXContext, XXConversation } from './types.js';
+import { NotifyData, StatusData, XXEvent } from "../../events/types.js";
+import { Status, StatusIcon } from "../../cmix/types.js";
+import { Icons, prettify_address_alias } from "../../utils.js";
+import { Other } from "grammy/out/core/api";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,28 +53,65 @@ export async function initTelegram(db: Database, token: string) {
         }
     }
 
-    async function greeting(conversation: XXConversation, ctx: XXContext){
-        console.log("pffft")
-    }
+
 
     telegram_bot.api.setMyCommands(commands.map( (command) => ({command: command.name, description: command.description})))
     for(const command of commands) {
-        telegram_bot.command(command.name, (ctx) => command.execute(ctx, db))
+        telegram_bot.command(command.name, (ctx) => command.execute(ctx, db)) // register command with callback
+        for (const convo in command.conversations) {   // add all conversations to the bot before starting
+            console.log(`Registering Telegram conversation ${convo} for ${command.name}`)
+            telegram_bot.use(createConversation<XXContext>( (conversation, ctx) => command.conversations![convo](conversation, ctx, db), `${command.name}-${convo}`))
+        }
         for (const callback in command.callbacks) { // add all callbacks to the bot before starting
             console.log(`Registering Telegram callback ${callback} for ${command.name}`)
-            telegram_bot.callbackQuery(callback, (ctx) => command.callbacks![callback](ctx, db))
-        }
-        for (const convo in command.convos) {   // add all conversations to the bot before starting
-            console.log(`Registering Telegram conversation ${convo} for ${command.name}`)
-            telegram_bot.use(createConversation<XXContext>( (conversation, ctx) => command.convos![convo](conversation, ctx, db), convo))
+            telegram_bot.callbackQuery(`${command.name}-${callback}`, (ctx) => command.callbacks![callback](ctx, db))
         }
 
-        
+        // Default callback handler
+        command.callbacks && 
+        command.callbacks.default !== undefined && 
+        telegram_bot.on("callback_query:data").filter((ctx) => ctx.callbackQuery.data.startsWith(command.name), async (ctx) => {
+            command.callbacks!.default(ctx, db)
+        })
+    }
+
+    // debug
+    async function greeting(conversation: XXConversation, ctx: XXContext){
+        console.log(await ctx.conversation)
     }
     telegram_bot.use(createConversation(greeting))
     telegram_bot.command("start", async (ctx) => await ctx.conversation.enter("greeting"));
 
+    telegram_bot.command("fart", async (ctx) => await ctx.conversation.enter("add"))
+
     await telegram_bot.init();
     telegram_bot.start();
     console.log(`Telegram bot ready: ${telegram_bot.botInfo.username}`);
+
+
+    // Subscribe to events
+    //  Validator Status Change
+    const validator_status_change: PubSubJS.SubscriptionListener<StatusData> = (msg, data) => {
+        var message = `${StatusIcon[data!.data.status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[data?.status_new.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
+        message += `  ${prettify_address_alias(data!.data.name, data!.data.node)} is now ${data!.status_new == Status.ERROR ? "in " : ""}_${data!.status_new}_`; // new status
+        const notify: NotifyData = {
+            id: data!.data.user,
+            msg: message,
+        }
+        notify && sendToDM(telegram_bot, notify.id, notify.msg, 
+        {
+            parse_mode: "MarkdownV2"
+        });
+    }
+    PubSub.subscribe(XXEvent.VALIDATOR_STATUS_CHANGE_TELEGRAM, validator_status_change);
+}
+
+async function sendToDM(bot: Bot<XXContext>, user_id: string | number, message: string | string[], other?: Other<RawApi, "sendMessage", "text" | "chat_id"> | undefined): Promise<any> {
+    if (Array.isArray(message)) {
+        for (const msg of message) {
+            await bot.api.sendMessage(user_id, msg, other)
+        }
+    }
+    else
+        await bot.api.sendMessage(user_id, message, other)
 }

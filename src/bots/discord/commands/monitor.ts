@@ -11,6 +11,7 @@ import { Status, StatusIcon } from "../../../cmix/types.js";
 // env guard
 import '../../../env-guard/monitor.js';
 import '../../../env-guard/discord.js';
+import { Bot } from "grammy";
 
 
 export const data = new SlashCommandBuilder()
@@ -66,7 +67,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
       const cmix_id = interaction.options.getString('id', true);
       const cmix_node_name = interaction.options.getString('name', false);
 
-      const status = await db.addNode(user.id, cmix_id, cmix_node_name); // returns false if the user is already monitoring this node/name combination
+      const status = await db.addNode(user.id, BotType.DISCORD, cmix_id, cmix_node_name); // returns false if the user is already monitoring this node/name combination
       if (status !== undefined) {
         // Successfully added or updated node
 
@@ -88,7 +89,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
               console.log(err);
     
               // delete the db entry
-              await db.deleteNode(user.id, cmix_id);
+              await db.deleteNode(user.id, BotType.DISCORD, cmix_id);
     
               reply_string = `${Icons.ERROR}  Error: I cannot send you a Direct Message. Please resolve that and try again.`;
             } else throw err; // this is some other kind of error, pass it on
@@ -109,7 +110,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
       const cmix_id = interaction.options.getString('id', true);
 
       // Get list of users subscriptions
-      const [_, deleted] = await db.deleteNode(user.id, cmix_id);
+      const [_, deleted] = await db.deleteNode(user.id, BotType.DISCORD, cmix_id);
       if (deleted.length) {
         // Deleted node successfully
         reply_string = `${Icons.DELETE}  You are no longer monitoring ${prettify_address_alias(deleted[0].name, cmix_id)}.`;
