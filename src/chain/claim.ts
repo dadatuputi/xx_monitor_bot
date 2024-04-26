@@ -28,7 +28,7 @@ import type {
 } from "./types.js";
 
 // env guard
-import '../env-guard/claim.js'
+import '../env-guard/chain.js'
 
 export async function startAllClaiming(
   db: Database,

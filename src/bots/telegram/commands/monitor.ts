@@ -6,7 +6,7 @@ import { Status, StatusIcon } from "../../../cmix/types.js";
 import { CallbackQueryContext, InlineKeyboard } from "grammy";
 
 // env guard
-import '../../../env-guard/claim.js';
+import '../../../env-guard/chain.js';
 import { BotType } from "../../types.js";
 import { XXContext, XXConversation } from "../types.js";
 

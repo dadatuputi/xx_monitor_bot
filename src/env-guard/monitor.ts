@@ -1,4 +1,4 @@
-import { guard } from "./index.js"
+import { vars_in_env } from "./index.js"
 
 const vars = [
   'CMIX_API_ENDPOINT',
@@ -7,4 +7,4 @@ const vars = [
   'CHAIN_RPC_ENDPOINT',
 ]
 
-guard(vars, 'monitor');
+vars_in_env(vars, 'monitor');

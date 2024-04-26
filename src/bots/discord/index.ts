@@ -25,17 +25,18 @@ export async function initDiscord(db: Database, token: string): Promise<void> {
   // Build collection of available commands from the commands directory
   for (const file of commandFiles) {
     // each command file determines whether it will load by throwing an error when it can't
+    const filePath = join(commandsPath, file);
+
     try {
-      const filePath = join(commandsPath, file);
       const command = await import(filePath);
       // Set a new item in the Collection with the key as the command name and the value as the exported module
       if ("data" in command && "execute" in command) {
         discord_bot.commands.set(command.data.name, command);
       } else {
-        throw new Error(`[WARNING] The command at ${filePath} was not loaded: missing a required "data" or "execute" property. Continuing`)
+        throw new Error(`Missing a required "data" or "execute" property`)
       }
     } catch (e) {
-      console.log(e);
+      console.log(`[WARNING] The command at ${filePath} was not loaded: ${e}; Continuing`);
     }
   }
 

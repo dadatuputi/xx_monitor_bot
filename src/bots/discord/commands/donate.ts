@@ -7,7 +7,7 @@ import type { Database } from "../../../db/index.js";
 
 // env guard
 import '../../../env-guard/donate.js';
-import '../../../env-guard/claim.js';
+import '../../../env-guard/chain.js';
 import '../../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()

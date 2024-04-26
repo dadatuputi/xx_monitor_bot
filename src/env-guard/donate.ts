@@ -1,7 +1,7 @@
-import { guard } from "./index.js"
+import { vars_in_env } from "./index.js"
 
 const vars = [
   'DONATE_WALLET'
 ]
 
-guard(vars, 'donate');
+vars_in_env(vars, 'donate');

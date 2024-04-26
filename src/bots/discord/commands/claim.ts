@@ -13,7 +13,7 @@ import type { AutocompleteInteraction, ChatInputCommandInteraction } from "disco
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
 
 // env guard
-import '../../../env-guard/claim.js';
+import '../../../env-guard/chain.js';
 import '../../../env-guard/discord.js';
 
 export const data = new SlashCommandBuilder()

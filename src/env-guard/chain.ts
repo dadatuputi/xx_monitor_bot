@@ -1,12 +1,10 @@
-import { guard } from "./index.js"
+import { vars_in_env } from "./index.js"
 
 const vars = [
   'CHAIN_RPC_ENDPOINT',
   'CLAIM_CRON_DAILY',
   'CLAIM_BATCH',
-  'CLAIM_WALLET',
-  'CLAIM_PASSWORD',
   'EXPLORER_URL',
 ]
 
-guard(vars, 'claims');
+vars_in_env(vars, 'chain');

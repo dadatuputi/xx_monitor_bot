@@ -4,6 +4,7 @@ import { startPolling } from "./cmix/index.js";
 import { Database } from "./db/index.js";
 import { initDiscord } from "./bots/discord/index.js";
 import { initTelegram } from "./bots/telegram/index.js";
+import { vars_in_env } from "./env-guard/index.js";
 
 var env = process.env.NODE_ENV || "development";
 console.log(`NODE_ENV: ${env}`);
@@ -26,10 +27,15 @@ db.update_bot_column(); // add bot column to old dbs - will eventually remove
 
 // start chain listener
 (async () => {
-    await import('./env-guard/claim.js')
+    await import('./env-guard/chain.js')
     await testChain()
-    startAllClaiming(db, process.env.CHAIN_RPC_ENDPOINT!);
     startListeningCommission(process.env.CHAIN_RPC_ENDPOINT!);
+
+    if (vars_in_env(['CLAIM_WALLET', 'CLAIM_PASSWORD'], 'claims', false, true)){
+      startAllClaiming(db, process.env.CHAIN_RPC_ENDPOINT!);
+    } else {
+      console.log("Claiming disabled due to missing env vars.")
+    }
   }
 )();
 

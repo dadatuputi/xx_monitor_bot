@@ -1,4 +1,4 @@
-import { guard } from "./index.js"
+import { vars_in_env } from "./index.js"
 
 const vars = [
   'DISCORD_TOKEN',
@@ -6,4 +6,4 @@ const vars = [
   'DEV_GUILD_ID'
 ]
 
-guard(vars, 'discord');
+vars_in_env(vars, 'discord');
