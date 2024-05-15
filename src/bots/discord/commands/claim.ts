@@ -1,11 +1,11 @@
 import moment from "moment";
 import { SlashCommandBuilder, DiscordAPIError } from "discord.js";
-import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL, pluralize } from "../../../utils.js";
+import { prettify_address_alias, Icons, engulph_fetch_claimers, pluralize, XX_WALLET_LEN_MAX, XX_WALLET_LEN_MIN } from "../../../utils.js";
 import { Chain, isValidXXAddress } from "../../../chain/index.js";
 import { ClaimRecord } from "../../../db/types.js";
 import { ClaimConfig, ClaimFrequency, ExternalStakerConfig } from "../../../chain/types.js";
 import { Claim } from "../../../chain/claim.js";
-import { Command } from "../../types.js";
+import { BotType, Command } from "../../types.js";
 
 import type { DeleteResult, WithId } from "mongodb";
 import type { Database } from "../../../db/index.js";
@@ -75,8 +75,8 @@ data .addSubcommand(subcommand =>
         .setName("wallet")
         .setDescription("The wallet to unsubscribe")
         .setRequired(true)
-        .setMaxLength(48)
-        .setMinLength(47)
+        .setMaxLength(XX_WALLET_LEN_MAX)
+        .setMinLength(XX_WALLET_LEN_MIN)
         .setAutocomplete(true)));
 
 
@@ -101,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
         reply_string = "Not a valid xx wallet address";
         break;
       }
-      const updates = await db.addClaim(user.id, subcommand, wallet, wallet_name); // returns empty array if new record, or array of updates if not
+      const updates = await db.addClaim(user.id, BotType.DISCORD, subcommand, wallet, wallet_name); // returns empty array if new record, or array of updates if not
 
       if (updates === null) {
         // User is already monitoring this wallet as-is
@@ -127,7 +127,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
             console.log(err);
   
             // delete the db entry
-            await db.deleteClaim(user.id, wallet);
+            await db.deleteClaim(user.id, BotType.DISCORD, wallet);
   
             reply_string = `${Icons.ERROR}  Error: I cannot send you a Direct Message. Please resolve that and try again.`;
           } else throw err; // this is some other kind of error, pass it on
@@ -144,7 +144,6 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
 
       const external_stakers: ExternalStakerConfig = {
         fn: engulph_fetch_claimers,
-        identifier: EXTERNAL,
         args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
       }
 
@@ -169,7 +168,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
 
     case "list": {
       // Get a list of user's subscribed wallets
-      const claims = await db.listUserClaims(user.id);
+      const claims = await db.listUserClaims(user.id, BotType.DISCORD);
       const freqs = claims.reduce( (acc, claim) => acc.add(claim.frequency),new Set<string>());
       const wallets = Array.from(freqs).reduce<Map<string, ClaimRecord[]>>( (acc, freq) => acc.set(freq, claims.filter( (claim) => claim.frequency === freq)), new Map<string, ClaimRecord[]>());
 
@@ -206,7 +205,7 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
       const wallet : string = interaction.options.getString("wallet", true);
 
       // Get list of users subscriptions
-        const [result, deleted]: [DeleteResult, WithId<ClaimRecord>[]] = await db.deleteClaim(user.id, wallet);
+        const [result, deleted]: [DeleteResult, WithId<ClaimRecord>[]] = await db.deleteClaim(user.id, BotType.DISCORD, wallet);
       if (deleted.length) {
         // Deleted node successfully
         reply_string = `${Icons.DELETE}  You are no longer subscribed to ${deleted[0].frequency} payouts for ${prettify_address_alias(deleted[0].alias, wallet)}.`;
@@ -233,7 +232,7 @@ export async function autocomplete(
   const focusedValue = interaction.options.getFocused();
 
   // Get list of nodes monitored from db
-  const monitored_nodes = await db.listUserClaims(user.id);
+  const monitored_nodes = await db.listUserClaims(user.id, BotType.DISCORD);
   const choices = monitored_nodes.map((entry) => ({
     id: entry.wallet,
     text: `${prettify_address_alias(entry.alias, entry.wallet, false)}`,

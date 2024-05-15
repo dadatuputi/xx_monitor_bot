@@ -1,7 +1,10 @@
 import type { DeriveStakerReward } from "@polkadot/api-derive/types";
 import type { BN } from "@polkadot/util";
 import type { KeyringPair } from "@polkadot/keyring/types";
+import { CmixID } from "../cmix/types";
+import { BotType } from "../bots/types";
 
+export type XxWallet = string
 export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
   static readonly DAILY  = new ClaimFrequency('daily', '');
   static readonly WEEKLY  = new ClaimFrequency('weekly', '');
@@ -26,14 +29,15 @@ export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/148
 
 export interface ExternalStaker {
   // records from external staker source
-  wallet: string;
   ip: string;
+  wallet: XxWallet;
 }
 
 export interface Staker {
   // used to manage user-staker claim subscriptions
   user_id: string;
-  wallet: string;
+  bot_type?: BotType; // optional
+  wallet: XxWallet;
   alias?: string | null;
 }
 
@@ -50,8 +54,8 @@ export interface StakerRewardsAvailable extends StakerRewards {
 export interface EraClaim {
   // Used for executing the claim
   era: number;
-  validator: string;
-  notify: StakerRewardsAvailable[];   // all of the claimers for this era/validator, indexed by user_id and wallet
+  validator: XxWallet;
+  claimers: StakerRewardsAvailable[];   // all of the claimers for this era/validator, indexed by user_id and wallet
   fee?: BN;
 }
 
@@ -60,7 +64,7 @@ export interface StakerNotify extends Staker {
   era: number;
   payout: BN;
   isValidator: boolean;
-  validators: string[];
+  validators: XxWallet[];
   fee?: BN;
 }
 
@@ -68,19 +72,23 @@ export interface ClaimConfig {
   frequency: ClaimFrequency,
   batch: number,
   wallet: KeyringPair,
+  stakers?: Staker[]
   dry_run?: boolean
 }
 
 export interface ExternalStakerConfig {
   fn: Function,
-  identifier: string,
   args: {[key: string]: any}
 }
 
 export interface CommissionChange {
-  wallet: string,
-  cmix_id: string,
+  wallet: XxWallet,
+  cmix_id: CmixID,
   commission: number,
   commission_previous: number,
-  chain_decimals: number,
+}
+
+export interface ClaimBatchResults {
+  success: boolean,
+  results: EraClaim[],
 }

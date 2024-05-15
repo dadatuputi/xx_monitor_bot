@@ -1,8 +1,10 @@
+export type CmixID = string
+
 export interface CmixNode {
   name: string;
   location: string;
   geoBin: string;
-  id: string;
+  id: CmixID;
   base64url: string;
   uptime: number;
   realtimeFailureAvg: number;

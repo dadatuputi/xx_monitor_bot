@@ -1,22 +1,45 @@
-import { MonitorRecord } from "../db/types"
+import { Chain } from "../chain";
+import { ClaimFrequency, CommissionChange, StakerNotify, XxWallet } from "../chain/types";
+import { CmixID, CmixNode } from "../cmix/types"
+import { BN } from "@polkadot/util";
+
 
 export enum XXEvent {
-    VALIDATOR_STATUS_CHANGE_DISCORD = "VALIDATOR_STATUS_CHANGE_DISCORD",
-    VALIDATOR_STATUS_CHANGE_TELEGRAM = "VALIDATOR_STATUS_CHANGE_TELEGRAM",    
-    VALIDATOR_NAME_CHANGE = "VALIDATOR_NAME_CHANGE",
-    VALIDATOR_COMMISSION_CHANGE = "VALIDATOR_COMMISSION_CHANGE",
-    CLAIM_EXECUTED = "CLAIM_EXECUTED",
-    CLAIM_FAILED = "CLAIM_FAILED",
-    LOG_ADMIN = "LOG_ADMIN"
+    MONITOR_NAME_NEW = "MONITOR.NAME.NEW",
+    MONITOR_STATUS_NEW = "MONITOR.STATUS.NEW",
+    MONITOR_COMMISSION_NEW = "MONITOR.COMMISSION.NEW",
+    CLAIM_EXECUTED = "CLAIM.EXECUTED",
+    LOG_ADMIN = "LOG.ADMIN",
 }
 
-
-export interface NotifyData {
-    id: string,
-    msg: string | string[]
+interface EventData {
+    user_id: string,
+}
+interface UpdateEventData extends EventData {
+    node_id: CmixID,
+    node_name: string | null,
 }
 
-export interface StatusData {
-    status_new: string,
-    data: MonitorRecord
+export interface NameEventData extends UpdateEventData {
+    old_name: string | null,
+    wallet_address?: string,
+}
+
+export interface StatusEventData extends UpdateEventData {
+    new_status: string,
+    old_status: string
+}
+
+export interface ClaimEventData extends EventData {
+    chain: Chain,
+    success: boolean,
+    claim_wallet_bal: BN,
+    frequency: ClaimFrequency,
+    claim_total: BN,
+    eras: number[],
+    wallets: Map<XxWallet, StakerNotify[]>,
+}
+
+export interface CommissionEventData extends UpdateEventData {
+    commission_data: CommissionChange
 }

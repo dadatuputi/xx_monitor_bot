@@ -3,7 +3,7 @@ import { Database } from "../db/index.js";
 import { Icons, prettify_address_alias } from "../utils.js";
 import { StatusCmix, } from "./types.js";
 import { inlineCode, spoiler } from "discord.js";
-import { NotifyData, XXEvent } from "../events/types.js";
+import { NameEventData, StatusEventData, XXEvent } from "../events/types.js";
 import cronstrue from "cronstrue";
 import PubSub from 'pubsub-js';
 
@@ -57,33 +57,38 @@ async function poll(db: Database, api_endpoint: string) {
           StatusCmix[node.status as keyof typeof StatusCmix] : 
           StatusCmix.unknown; // when status is an empty string, status is Status.UNKNOWN
   
-        // update database with new name, as appropriate
+        // update monitored node database with new name
         if (node.name) {
           const monitor_results = await db.updateNodeName(node.id, name);
-          monitor_results.length && console.log(`Notifying ${monitor_results.length} monitor of node ${node.id} of name change to ${node.name}`);
+          monitor_results.length && console.log(`Notifying ${monitor_results.length} monitors of node ${node.id} of name change to ${node.name}`);
+
           for(const record of monitor_results){
-            const retrows = new Array<string>();
-            retrows.push(`${Icons.UPDATE} cMix node ${prettify_address_alias(null, node.id, true)} name updated: ${inlineCode(record.name ? record.name : 'empty')}${Icons.TRANSIT}${inlineCode(node.name)}`)
-            retrows.push(`${Icons.UPDATE} ${spoiler(`Use command ${inlineCode('/monitor add')} to set your own alias and stop name updates from the dashboard`)}`)
-            const data: NotifyData = {
-              id: record.user,
-              msg: retrows,
+            const data : NameEventData = {
+              user_id: record.user,
+              node_id: node.id,
+              node_name: node.name,
+              old_name: record.name,
             }
-            PubSub.publish(XXEvent.VALIDATOR_NAME_CHANGE, data)
+
+            // Send a notification to the user
+            PubSub.publish([XXEvent.MONITOR_NAME_NEW, record.bot].join("."), data)
           }
 
+          // update claim database with new name
           if (node.walletAddress) {
             const claim_results = await db.updateClaimAlias(node.walletAddress, name);
-            claim_results.length && console.log(`Notifying ${claim_results.length} claimers of validator ${node.walletAddress} of name change to ${node.name}`);
+            claim_results.length && console.log(`Notifying ${claim_results.length} claimers of validator ${node.walletAddress} of alias change to ${node.name}`);
+
             for(const record of claim_results){
-              const retrows = new Array<string>();
-              retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, node.walletAddress, true, 48)} alias updated: ${inlineCode(record.name ? record.name : 'empty')}${Icons.TRANSIT}${inlineCode(node.name)}`)
-              retrows.push(`${Icons.UPDATE} ${spoiler(inlineCode(`Use command /claim to set your own alias and stop name updates from the dashboard`))}`)
-              const data: NotifyData = {
-                id: record.user,
-                msg: retrows,
+              const data : NameEventData = {
+                user_id: record.user,
+                node_id: node.id,
+                node_name: node.name,
+                old_name: record.name,
+                wallet_address: node.walletAddress,
               }
-              PubSub.publish(XXEvent.VALIDATOR_NAME_CHANGE, data)
+
+              PubSub.publish([XXEvent.MONITOR_NAME_NEW, record.bot].join("."), data)
             }
           }
         }
@@ -91,17 +96,19 @@ async function poll(db: Database, api_endpoint: string) {
         // update database with new status
         const status_results = await db.updateNodeStatus(node.id, status_new);
         status_results.length && console.log(`Notifying ${status_results.length} monitor of node ${node.id} of status change to ${status_new}`);
+
         for(const record of status_results) {
-          console.log(record)
-          // Send a notification to the user
-          switch (record.bot) {
-            case BotType.DISCORD:
-              PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE_DISCORD, {status_new: status_new, data: record})
-              break;
-            case BotType.TELEGRAM:
-              PubSub.publish(XXEvent.VALIDATOR_STATUS_CHANGE_TELEGRAM, {status_new: status_new, data: record})
-              break;
+          const data: StatusEventData = {
+            user_id: record.user,
+            new_status: status_new,
+            node_id: record.node,
+            node_name: record.name,
+            old_status: record.status
           }
+          console.log(record)
+
+          // Send a notification to the user
+          PubSub.publish([XXEvent.MONITOR_STATUS_NEW, record.bot].join("."), data)
         }
       });
 

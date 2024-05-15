@@ -3,9 +3,9 @@ import custom from "../custom-derives/index.js";
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { hexToU8a, isHex, formatBalance } from '@polkadot/util';
 import { ApiPromise, WsProvider, Keyring } from "@polkadot/api";
-import { wait } from "../utils.js";
+import { Icons, XX_WALLET_LEN_MAX, XX_WALLET_LEN_MIN, wait } from "../utils.js";
 import { cmix_id_b64 } from "../cmix/index.js";
-import { XXEvent } from "../events/types.js";
+import { CommissionEventData, XXEvent } from "../events/types.js";
 import PubSub from 'pubsub-js';
 
 import type { KeyringPair, KeyringPair$Json, KeyringOptions } from "@polkadot/keyring/types";
@@ -13,8 +13,11 @@ import type { BN } from "@polkadot/util";
 import type { Balance, Era } from "@polkadot/types/interfaces/types.js";
 import type { PalletStakingValidatorPrefs, } from "@polkadot/types/lookup";
 import type { CommissionChange } from "./types.js";
+import { BotType } from "../bots/types.js";
+import { Database } from "../db/index.js";
 
 const XX_SS58_PREFIX = 55;
+const PRICE_TTL = 5*60*1000; // 5 minutes
 
 export async function testChain(): Promise<void> {
   // test that we can connect to the provided endpoint except when deploying commands
@@ -44,16 +47,32 @@ export function isValidXXAddress(address: string) : boolean {
   }
 };
 
-export async function startListeningCommission(rpc: string) {
-  (await Chain.create(rpc)).subscribe_commission_change( (change) => {
-    PubSub.publish(XXEvent.VALIDATOR_COMMISSION_CHANGE, change)
+export async function startListeningCommission(db: Database, rpc: string) {
+  (await Chain.create(rpc)).subscribe_commission_change( async (change) => {
+    //  Validator Commission Change
+    const monitor_results = await db.updateNodeCommission(change.cmix_id, change.commission)
+    
+    monitor_results.length && console.log(`Notifying ${monitor_results.length} monitor of node ${change.cmix_id} of commission change to ${Chain.commissionToHuman(change.commission)}`);
+
+    for(const record of monitor_results){
+      const data : CommissionEventData = {
+        user_id: record.user,
+        node_id: record.node,
+        node_name: record.name,
+        commission_data: change,
+      }
+      // Send a notification to the user
+      PubSub.publish([XXEvent.MONITOR_COMMISSION_NEW, record.bot].join("."), data)
+    }
   });
 }
 
 export class Chain{
   public endpoint: string;
   public api!: ApiPromise;
-  public decimals: number = 9;
+  public static decimals: number = 9;
+  private _price_promise: Promise<number> | undefined = undefined;
+  private _price_check: number = 0;
   
   constructor(endpoint: string) {
     this.endpoint = endpoint;
@@ -71,7 +90,7 @@ export class Chain{
       const api = await ApiPromise.create(options);
       await api.isReadyOrError
 
-      this.decimals = api.registry.chainDecimals[0];
+      Chain.decimals = api.registry.chainDecimals[0];
 
       // ensure chain is syncronized; from https://github.com/xx-labs/exchange-integration/blob/a027526819fdcfd4145fd45b7ceeeaaf371ebcf2/detect-transfers/index.js#L33
       while((await api.rpc.system.health()).isSyncing.isTrue){
@@ -147,7 +166,6 @@ export class Chain{
                   cmix_id: cmix_id_b64(cmixId.unwrap().toU8a()),
                   commission: arg.commission.unwrap().toNumber(),
                   commission_previous: await this.get_commission(extr.signer.toString(), blockNumber-1),
-                  chain_decimals: this.decimals
                 }
                 callbackfn(change);
               }
@@ -171,12 +189,12 @@ export class Chain{
   }
 
   public xx_bal_string(xx: number | bigint | BN | Balance, sig_digits: number = 2): string {
-    formatBalance.setDefaults({ decimals: this.decimals, unit: 'xx'})
+    formatBalance.setDefaults({ decimals: Chain.decimals, unit: 'xx'})
     const balfor = formatBalance(xx)
     const [num, unit] = balfor.split(' ');
     const [int, frac] = num.split('.');
     const frac_short = frac?.slice(0,sig_digits) ?? ''
-    return `${int}${frac_short ? `.${frac_short}` : ''} ${unit}`
+    return `${int}${frac_short ? `.${frac_short}` : ''} ${unit ? unit : 'xx'}`
   }
 
   public xx_bal_usd_string(xx: BN, price: number | undefined): string {
@@ -210,8 +228,35 @@ export class Chain{
     return key_pair;
   }
 
-  public static commissionToHuman(commission: number, decimals: number): string {
+  public static commissionToHuman(commission: number, decimals: number = Chain.decimals): string {
     return `${(100 * commission/10**decimals).toFixed(2)}%`;
   }
 
+  public static async get_price(currency: string = "usd"): Promise<number> {
+    // get current price
+    const params = new URLSearchParams({
+      ids: "xxcoin",
+      vs_currencies: currency,
+    });
+    const headers = new Headers({
+      accept: "application/json",
+    });
+    const price: number = (
+      await (
+        await fetch(`https://api.coingecko.com/api/v3/simple/price?${params}`, {
+          headers,
+        })
+      ).json()
+    ).xxcoin.usd;
+    return price;
+  }
+
+  get price_promise() {
+    // Update cached price if older than TTL
+    if (Date.now() - this._price_check > PRICE_TTL ) {
+      this._price_promise = Chain.get_price();
+      this._price_check = Date.now()
+    }
+    return this._price_promise
+  }
 };

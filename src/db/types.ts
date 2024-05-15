@@ -7,8 +7,12 @@ export interface RecordUpdate {
   new: string
 }
 
-export interface ClaimRecord extends OptionalId<Document> {
+interface XxRecord extends OptionalId<Document> {
   user: string; // unique chat client user id
+  bot: string; // bot type 
+}
+
+export interface ClaimRecord extends XxRecord {
   wallet: string; // wallet address
   frequency: string; // how often to claim
   alias?: string | null; // wallet name
@@ -17,10 +21,8 @@ export interface ClaimRecord extends OptionalId<Document> {
   last_amount?: BN | null; // last claim amount
 }
 
-export interface MonitorRecord extends OptionalId<Document> {
-  user: string; // unique chat client user id
+export interface MonitorRecord extends XxRecord {
   node: string; // node_id
-  bot: string; // bot_type
   name: string | null; // node_name
   user_set_name: boolean; // true if user set the name, false otherwise
   status: string; // based on status object below,
@@ -29,8 +31,7 @@ export interface MonitorRecord extends OptionalId<Document> {
   commission_changed?: Date
 }
 
-export interface LogActionRecord extends OptionalId<Document> {
-  user: string; // discord_id
+export interface LogActionRecord extends XxRecord {
   time: Date; // timestamp
   action: string; // usually the command name
   data: string; // data for action

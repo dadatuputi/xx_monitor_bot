@@ -4,10 +4,10 @@ import "@xxnetwork/types";
 import { BN } from "@polkadot/util";
 import { CronJob } from "cron";
 import { codeBlock, spoiler } from "discord.js";
-import { Icons, prettify_address_alias, xx_price as get_xx_price, pluralize, engulph_fetch_claimers, EXTERNAL, wait } from "../utils.js";
-import { Chain, testChain } from "./index.js";
+import { Icons, prettify_address_alias, pluralize, engulph_fetch_claimers } from "../utils.js";
+import { Chain } from "./index.js";
 import { ClaimFrequency } from "./types.js";
-import { NotifyData, XXEvent } from "../events/types.js";
+import { ClaimEventData, XXEvent } from "../events/types.js";
 import chalk from 'chalk';
 import cronstrue from 'cronstrue';
 import PubSub from 'pubsub-js';
@@ -25,10 +25,13 @@ import type {
   StakerNotify,
   ClaimConfig,
   ExternalStakerConfig,
+  XxWallet,
+  ClaimBatchResults,
 } from "./types.js";
 
 // env guard
 import '../env-guard/chain.js'
+import { BotType } from "../bots/types.js";
 
 export async function startAllClaiming(
   db: Database,
@@ -58,7 +61,6 @@ export async function startAllClaiming(
     // start external staker claim cron
     const external_stakers: ExternalStakerConfig = {
       fn: engulph_fetch_claimers,
-      identifier: EXTERNAL,
       args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
     }
     startClaiming(db, chain_rpc, cfg_weekly, external_stakers);
@@ -126,32 +128,31 @@ export class Claim {
     return me;
   }
 
+  
   public async prepare(){
-    // populate stakers
     const stakers: Array<Staker> = [];
-    if (this.external) {
-      const external_stakers = await this.external.fn(this.external.identifier, this.external.args);
-      stakers.push(...external_stakers); // if a ExternalStakerConfig object is provided, grab stakers from that endpoint
-      this.log(`Pulled ${external_stakers.length} stakers from external`)
-    } else {
-      stakers.push(...await this.db.getClaimers(this.cfg.frequency)); // get stakers from mongodb
-      this.log(`Pulled ${stakers.length} stakers from db`)
-    }
     
-    try{
-      this.price = await get_xx_price();
-      this.log(`Current token price: ${this.price}`)
-    } catch(e) {
-      this.log(`Error getting xx token price: ${e}`)
+    // populate stakers
+    // If config has stakers included, use those, otherwise pull from db/external
+    if (this.cfg.stakers && this.cfg.stakers.length > 0) {
+      stakers.push(...this.cfg.stakers)
+      this.log(`Pulled ${stakers.length} stakers from config`)
+    } else {
+      stakers.push(...await this.db.getClaimers(this.cfg.frequency)) // get stakers from mongodb
+      this.log(`Pulled ${stakers.length} stakers from db`)
+      
+      if (this.external) {
+        const external_stakers = await this.external.fn(this.external.args);
+        stakers.push(...external_stakers); // if a ExternalStakerConfig object is provided, grab stakers from that endpoint
+        this.log(`Pulled ${external_stakers.length} stakers from external`)
+      } 
     }
 
-    // query the chain to populate stakers with available rewards
-    // STEP 1
+    // STEP 1 - query the chain to populate stakers with available rewards
     this.log(`*** Claim Step 1: Querying the chain for rewards for ${pluralize(new Set(stakers.map((value)=>value.user_id)), 'claimer')} / ${pluralize(stakers, 'wallet')} ***`)
     this.stakers = await this.get_available_rewards(stakers);
 
-    // prepare a list of claims to submit with unique era/address combinations
-    // STEP 2
+    // STEP 2 - prepare a list of claims to submit with unique era/address combinations
     this.log('*** Claim Step 2: Preparing claims from stakers list ***')
     // Build EraClaim[] from StakerRewardsAvailable[]
     this.era_claims = this.build_era_claims(this.stakers);
@@ -163,20 +164,18 @@ export class Claim {
     // check claim is prepped and ready to go
     if (!this.is_prepared) await this.prepare();
 
-    // submit payout transactions
-    // STEP 3
+    // STEP 3 - submit payout transactions
     this.log(`*** Claim Step 3: Submitting ${this.era_claims.length} claims ***`)
     const [claims_fulfilled, claims_failed] = await this.submit_claim(this.era_claims);
 
-    // notify stakers
-    // STEP 4
+    // STEP 4 - notify stakers
     this.log("*** Claim Step 4: Notifying stakers of completed claims ***")
     if (this.external){
       this.log("\tExternal stakers, skipping")
     } else {
-      await this.notify_stakers(claims_fulfilled, claims_failed)
-      this.log(`\tNotified ${new Set(claims_fulfilled.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users of a payout`)
-      this.log(`\t${new Set(claims_failed.flatMap( (claim) => claim.notify.map( (staker) => staker.user_id))).size} users had failed payouts`)
+      const {success, failure} = await this.notify_stakers([claims_fulfilled, claims_failed])
+      this.log(`\tNotified ${success} users of a payout`)
+      this.log(`\t${failure} users had failed payouts`)
     }
     // disconnect
     this.log(`Disconnecting from ${this.chain.endpoint}`)
@@ -236,7 +235,7 @@ export class Claim {
     }
   }
 
-  private async submit_claim(era_claims: EraClaim[]): Promise<[EraClaim[], EraClaim[]]> {
+  private async submit_claim(era_claims: EraClaim[]): Promise<ClaimBatchResults[]> {
     const claims_fulfilled = new Array<EraClaim>() as EraClaim[];
     const claims_failed = new Array<EraClaim>() as EraClaim[];
 
@@ -244,7 +243,7 @@ export class Claim {
       const payoutCalls: Array<SubmittableExtrinsic<"promise", ISubmittableResult>> = [];
       const claims_batch = era_claims.splice(0, this.cfg.batch); //end not included
   
-      claims_batch.forEach(({ validator, era, notify: stakers }) => {
+      claims_batch.forEach(({ validator, era, claimers: stakers }) => {
         this.log(`Adding era ${era} claim for ${validator} (stakers: ${Array.from(new Set(stakers.map( (staker) => staker.user_id))).join(", ")})`);
         payoutCalls.push(this.chain.api.tx.staking.payoutStakers(validator, era));
       });
@@ -290,18 +289,30 @@ export class Claim {
       `\tClaimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
     );
   
-    return [claims_fulfilled, claims_failed];
+    return [
+      {
+        success: true,
+        results: claims_fulfilled
+      },
+      {
+        success: false,
+        results: claims_failed
+      }
+    ] as ClaimBatchResults[];
   }
 
-  private async notify_stakers(claims_fulfilled: EraClaim[], claims_failed: EraClaim[]): Promise<void> {
+  // Notifies users of successes, and returns the number of users notified for success and the number of users who had failures
+  private async notify_stakers(claim_results: ClaimBatchResults[]): Promise<{success: number, failure: number}> {
     
-    function eraclaim_to_stakernotify(claims: EraClaim[]): Map<string, Map<string, StakerNotify[]>> {
-      // convert EraClaim[] to Map<id: string, Map<wallet: string, StakerNotify[]>>
-      const claims_notify = new Map<string, Map<string, StakerNotify[]>>()
-      claims.map( ({era, validator, notify, fee}) => {
-        notify.map( ({user_id, wallet, alias, rewards, available}) => {
-          claims_notify.has(user_id) || claims_notify.set(user_id, new Map<string, StakerNotify[]>())
-          claims_notify.get(user_id)!.has(wallet) || claims_notify.get(user_id)!.set(wallet, [])
+    function eraclaim_to_stakernotify(claims: EraClaim[]): Map<BotType, Map<string, Map<XxWallet, StakerNotify[]>>> {
+      // convert EraClaim[] to Map<bot: BotType, Map<id: string, Map<wallet: XxWallet, StakerNotify[]>>>
+      const claims_notify = new Map<BotType, Map<string, Map<XxWallet, StakerNotify[]>>>()
+      claims.map( ({era, validator, claimers, fee}) => {
+        claimers.filter( claimer => !!claimer.bot_type )  // claimers without a bot type are skipped
+        .map( ({user_id, bot_type, wallet, alias, rewards, available}) => {
+          claims_notify.has(bot_type!) || claims_notify.set(bot_type!, new Map<string, Map<XxWallet, StakerNotify[]>>())
+          claims_notify.get(bot_type!)!.has(user_id) || claims_notify.get(bot_type!)!.set(user_id, new Map<XxWallet, StakerNotify[]>())
+          claims_notify.get(bot_type!)!.get(user_id)!.has(wallet) || claims_notify.get(bot_type!)!.get(user_id)!.set(wallet, [])
           const reward = rewards.find( (reward) => reward.era.toNumber() === era)!
           const staker_notify: StakerNotify = {
             user_id: user_id,
@@ -311,76 +322,39 @@ export class Claim {
             payout: Object.values(reward.validators).reduce( (acc, val) => acc.iadd(val.value), new BN(0)),
             isValidator: reward.isValidator,
             validators: Object.keys(reward.validators),
-            fee: fee?.divn(notify.length) // this further divids the fee by the number of claimers
+            fee: fee?.divn(claimers.length) // this further divids the fee by the number of claimers
           }
-          claims_notify.get(user_id)!.get(wallet)?.push(staker_notify)
+          claims_notify.get(bot_type!)!.get(user_id)!.get(wallet)?.push(staker_notify)
         })
       })
       return claims_notify;
     }
 
-    const claims_fulfilled_notify = eraclaim_to_stakernotify(claims_fulfilled)
-    const claims_failed_notify = eraclaim_to_stakernotify(claims_failed)
     const claim_wallet_bal = await this.chain.wallet_balance(this.cfg.wallet);
-
-
-    for(const [user_id, stakernotify_by_wallet] of claims_fulfilled_notify) {
-      // Send a notification to the user
-      const data: NotifyData = {
-        id: user_id,
-        msg: await this.notify_user_message(stakernotify_by_wallet, claim_wallet_bal, true),
+    // Push ClaimEventData to bot listeners
+    for( const {success, results} of claim_results ) {
+      for( const [bot_type, claims_by_bot] of eraclaim_to_stakernotify(results) ) {
+        for( const [user_id, claims_by_user] of claims_by_bot ) {
+          // Send a notification to the user
+          const data: ClaimEventData = {
+            chain: this.chain,
+            user_id: user_id,
+            success: success,
+            claim_wallet_bal: claim_wallet_bal,
+            frequency: this.cfg.frequency,
+            claim_total: [ ...claims_by_user.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0)),
+            eras: Array.from(new Set([ ...claims_by_user.values() ].flat().map( (claim_notify) => claim_notify.era))).sort(),
+            wallets: claims_by_user,
+          }
+          PubSub.publish([XXEvent.CLAIM_EXECUTED, bot_type].join("."), data)
+        }
       }
-      PubSub.publish(XXEvent.CLAIM_EXECUTED, data)
     }
-  
-    for(const [user_id, stakernotify_by_wallet] of claims_failed_notify) {
-      // Send a notification to the user
-      const data: NotifyData = {
-        id: user_id,
-        msg: await this.notify_user_message(stakernotify_by_wallet, claim_wallet_bal, false)
-      }
-      PubSub.publish(XXEvent.CLAIM_FAILED, data)
+
+    return {
+      success: claim_results.filter( result => result.success ).reduce( (acc, val) => val.results.length + acc, 0),
+      failure: claim_results.filter( result => !result.success ).reduce( (acc, val) => val.results.length + acc, 0),
     }
-  }
-
-  private async notify_user_message(claims: Map<string, StakerNotify[]>, claim_wallet_bal: BN, success: boolean = true) : Promise<string[]> {
-    const retrows = new Array<string>();
-  
-    // header is always the same
-    const eras = Array.from(new Set([ ...claims.values() ].flat().map( (claim_notify) => claim_notify.era))).sort()
-    const wallets = Array.from(claims.keys())
-    const _total: BN = [ ...claims.values() ].flat().reduce( (acc, val) => val.payout.add(acc), new BN(0));
-    const _total_string = `${this.chain.xx_bal_usd_string(_total, this.price)}`;
-    retrows.push(`${success ? `${this.cfg.frequency.symbol} claim results: ${_total_string}` : 'failed '}: ${pluralize(eras, 'era')} | ${pluralize(wallets, 'wallet')}`);
-  
-    // msg format
-    // Claimed rewards xx/$ for x eras / x wallets (tx xx/$)
-    //     alias / xxxxxx:
-    //         Era xxx: xx/$ as validator|nominator of xxxxx
-    const codeblock = new Array<string>();
-    claims.forEach( (stakers_notify, wallet) => {
-      // build the top wallet string: alias / xxxxxx:
-      const alias: string | undefined | null = stakers_notify.find( (claim_notify) => Boolean(claim_notify.alias) )?.alias;
-      codeblock.push(`${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 30)}:`);
-      
-      stakers_notify.forEach( (staker_notify) => {
-        // build the era line: Era xxx: xx
-        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR}⭆${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 9)).join(", ")}`;
-        const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
-        codeblock.push(`  Era ${staker_notify.era}: ${this.chain.xx_bal_usd_string(staker_notify.payout, this.price)} ${_val_nom_info}`);
-      });
-    });
-
-    const _total_fee: BN = [ ...claims.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
-    codeblock.push("");
-    codeblock.push(`  Fee: ${this.chain.xx_bal_string(_total_fee)} of ${this.chain.xx_bal_string(claim_wallet_bal)} in ${Icons.BOT} wallet`)
-    if (claim_wallet_bal.lt(new BN(10000*(10**this.chain.decimals)))) codeblock.push(`  To support this bot, type /donate`) // print donate pitch if wallet is < 10000 xx
-    codeblock.push("");
-  
-    codeblock.push(ClaimLegend);
-
-    retrows.push(spoiler(codeBlock(codeblock.join('\n'))))
-    return retrows;
   }
 
   private build_era_claims(stakers: StakerRewardsAvailable[]): EraClaim[] {
@@ -407,7 +381,7 @@ export class Claim {
         era_claims.push({
           era,
           validator,
-          notify: stakers,
+          claimers: stakers,
         });
       });
     });

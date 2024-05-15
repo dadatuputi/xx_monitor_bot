@@ -29,7 +29,7 @@ db.update_bot_column(); // add bot column to old dbs - will eventually remove
 (async () => {
     await import('./env-guard/chain.js')
     await testChain()
-    startListeningCommission(process.env.CHAIN_RPC_ENDPOINT!);
+    startListeningCommission(db, process.env.CHAIN_RPC_ENDPOINT!);
 
     if (vars_in_env(['CLAIM_WALLET', 'CLAIM_PASSWORD'], 'claims', false, true)){
       startAllClaiming(db, process.env.CHAIN_RPC_ENDPOINT!);

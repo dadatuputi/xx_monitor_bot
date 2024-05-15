@@ -65,15 +65,12 @@ export class Database {
     return result.length;
   }
 
-  public async logAction(
-    user_id: string,
-    action: string,
-    data: string
-  ): Promise<InsertOneResult<LogActionRecord>> {
+  public async logAction(user_id: string, bot_type: BotType, action: string, data: string): Promise<InsertOneResult<LogActionRecord>> {
     // Add a record for an action taken by a user
 
     const new_doc: LogActionRecord = {
       user: user_id,
+      bot: bot_type,
       time: new Date(),
       action: action,
       data: data,
@@ -127,7 +124,7 @@ export class Database {
     }
   }
 
-  public async addClaim(user_id: string, frequency: string, wallet: string, alias: string | null): Promise<Array<RecordUpdate> | null> {
+  public async addClaim(user_id: string, bot_type: BotType, frequency: string, wallet: string, alias: string | null): Promise<Array<RecordUpdate> | null> {
     // Add a node to the monitered node list
     const updates = new Array<RecordUpdate>();
 
@@ -135,6 +132,7 @@ export class Database {
     const query: Filter<ClaimRecord> = {
       user: user_id,
       wallet: wallet,
+      bot: bot_type,
     };
     const options: FindOptions<ClaimRecord> = {};
     const result: WithId<ClaimRecord> | null = await this.claims.findOne(
@@ -177,6 +175,7 @@ export class Database {
     } else {
       const new_doc: ClaimRecord = {
         user: user_id,
+        bot: bot_type,
         frequency: frequency,
         wallet: wallet,
         alias: alias,
@@ -320,11 +319,12 @@ export class Database {
     return await this.monitor_state.find(query, options).toArray();
   }
 
-  public async listUserClaims(user_id: string): Promise<ClaimRecord[]> {
+  public async listUserClaims(user_id: string, bot_type: BotType): Promise<ClaimRecord[]> {
     // Get list of user's subscriptions
 
     const query: Filter<ClaimRecord> = {
       user: user_id,
+      bot: bot_type
     };
     const options: FindOptions<ClaimRecord> = {
       projection: {
@@ -348,14 +348,12 @@ export class Database {
     return [result, deleted];
   }
 
-  public async deleteClaim(
-    user_id: string,
-    wallet: string
-  ): Promise<[DeleteResult, WithId<ClaimRecord>[]]> {
+  public async deleteClaim(user_id: string, bot_type: BotType, wallet: string): Promise<[DeleteResult, WithId<ClaimRecord>[]]> {
     // Delete the given node from the user record.
 
     const query: Filter<ClaimRecord> = {
       user: user_id,
+      bot: bot_type,
       wallet: wallet,
     };
     const options: FindOptions<ClaimRecord> = {};

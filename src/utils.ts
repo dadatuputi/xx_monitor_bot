@@ -9,17 +9,20 @@ export enum Icons {
   TRANSIT = "➜",
   LINK = "🔗",
   WALLET = "🪙",
-  VALIDATOR = "❤️",
-  NOMINATOR = "💚",
+  VALIDATOR = "👑",
+  NOMINATOR = "🤝",
   UPDATE = "✨",
   BOT = "🤖",
   EXTERNAL = "🌐",
   CMIX = "🖧",
   DIAMOND = "💎",
   ADD = "➕",
+  HASH = "#️⃣",
 }
 
 export const XX_ID_LEN = 44;
+export const XX_WALLET_LEN_MIN = 47;
+export const XX_WALLET_LEN_MAX = 48;
 
 export const base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/; // https://stackoverflow.com/a/35002237/1486966
 
@@ -69,23 +72,8 @@ export function prettify_address_alias(
   return codify ? inlineCode(retval) : retval;
 }
 
-export async function xx_price(): Promise<number> {
-  // get current price
-  const params = new URLSearchParams({
-    ids: "xxcoin",
-    vs_currencies: "usd",
-  });
-  const headers = new Headers({
-    accept: "application/json",
-  });
-  const price: number = (
-    await (
-      await fetch(`https://api.coingecko.com/api/v3/simple/price?${params}`, {
-        headers,
-      })
-    ).json()
-  ).xxcoin.usd;
-  return price;
+export function code(msg: string): string {
+  return inlineCode(msg)
 }
 
 export function pluralize(collection: Array<any> | Map<any, any> | Set<any>, noun: string, suffix = 's') {
@@ -99,9 +87,8 @@ export async function wait(ms: number) {
   });
 }
 
-export const EXTERNAL = 'external';    // string used to identify wallets claimed from web
 // This is an engul.ph-specific implementation of an external staker source; it can be replaced with a function that returns Array<Staker>
-export async function engulph_fetch_claimers(identifier: string, args: {endpoint: string, key: string}): Promise<Array<Staker>> {
+export async function engulph_fetch_claimers(args: {endpoint: string, key: string}): Promise<Array<Staker>> {
   // load addresses from cloudflare kv
   const response = await fetch(
     args.endpoint,
@@ -112,8 +99,7 @@ export async function engulph_fetch_claimers(identifier: string, args: {endpoint
   const text = await response.text();
   const wallets = JSON.parse(text) as Array<ExternalStaker>;
   const claimers = wallets.map<Staker>(({ ip, wallet }) => ({
-    user_id: identifier,
-    alias: ip,
+    user_id: ip,
     wallet: wallet,
   }));
 

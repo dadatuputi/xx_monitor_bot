@@ -9,6 +9,7 @@ import type { Database } from "../../../db/index.js";
 import '../../../env-guard/donate.js';
 import '../../../env-guard/chain.js';
 import '../../../env-guard/discord.js';
+import { vars_in_env } from "../../../env-guard/index.js";
 
 export const data = new SlashCommandBuilder()
   .setName("donate")
@@ -27,8 +28,14 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
   retrows.push(bold('Thank you for your interest in donating.'))
   retrows.push('')
   retrows.push(`    Donate to the  🤖  developer:  💎 ${inlineCode(process.env.DONATE_WALLET!)}`)
-  retrows.push('')
-  retrows.push(`    Donate to the  🤖  claim wallet:  🪙 ${inlineCode(claim_wallet.address)}`)
+
+  if (vars_in_env(['CLAIM_WALLET', 'CLAIM_PASSWORD'], 'claims', false, true)) {
+    const claim_wallet = Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!)
+
+    retrows.push('')
+    retrows.push(`    Donate to the  🤖  claim wallet:  🪙 ${inlineCode(claim_wallet.address)}`)
+  }
+
 
   // send the wallet details immediately
   await interaction.reply({ content: retrows.join('\n'), ephemeral: eph });

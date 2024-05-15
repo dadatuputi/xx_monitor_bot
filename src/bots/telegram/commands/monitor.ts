@@ -1,5 +1,5 @@
 import moment from "moment";
-import { prettify_address_alias, Icons, engulph_fetch_claimers, EXTERNAL, pluralize, base64regex, XX_ID_LEN } from "../../../utils.js";
+import { prettify_address_alias, Icons, engulph_fetch_claimers, pluralize, base64regex, XX_ID_LEN, code } from "../../../utils.js";
 import type { Database } from "../../../db/index.js";
 import base64url from "base64url";
 import { Status, StatusIcon } from "../../../cmix/types.js";
@@ -26,10 +26,10 @@ export async function execute(ctx: XXContext, db: Database) {
   let inlineKeyboard = new InlineKeyboard()
     .text(`${Icons.ADD} Add / Edit Node`, `${name}-add`)
 
-  const response = await buildResponseText(db, user.id.toString())
+  const [response, num_nodes] = await list_text(db, user.id.toString())
 
   // Add remove button if monitoring nodes
-  if (response.split(/\r\n|\r|\n/).length > 1)
+  if (num_nodes > 0)
     inlineKeyboard.text(`${Icons.DELETE} Remove Node`, `${name}-remove`)
 
   // First display a list of monitored nodes, if any
@@ -107,7 +107,7 @@ export const conversations = {
     let cmix_id = await conversation.form.text()
     while (!(cmix_id.length === XX_ID_LEN && base64regex.test(cmix_id))) {
       ctx.reply(
-        "Please provide a valid cmix ID\\.\n_Valid IDs are 44 characters long and base64 encoded\\._",
+        `${code(cmix_id)} is invalid\\.\nPlease provide a valid cmix ID\\.\n_Valid IDs are 44 characters long and base64 encoded\\._`,
         {
           parse_mode: "MarkdownV2"
         })
@@ -115,8 +115,21 @@ export const conversations = {
     }
 
     // get friendly name
-    ctx.reply("Please provide a friendly name for the node.")    
-    const cmix_node_name = await conversation.form.text()
+    const name_keyboard = new InlineKeyboard()
+      .text(`${Icons.HASH} Use node ID as name`, 'add-no-name')
+    await ctx.reply("Please provide a friendly name for the node\\.\n_Optional \\- leave blank for none\\._",
+    {
+      parse_mode: "MarkdownV2",
+      reply_markup: name_keyboard,
+    })
+    let cmix_node_name: string | null = null;
+    await conversation.waitForCallbackQuery(["add-no-name"], {
+      otherwise: async (ctx) => {
+        cmix_node_name = await conversation.form.text();
+        await ctx.answerCallbackQuery();
+      }
+    });
+    console.log(`friendly name is: ${cmix_node_name}`)
     // returns false if the user is already monitoring this node/name combination
     const status = await conversation.external(() => db.addNode(ctx.from!.id.toString(), BotType.TELEGRAM, cmix_id, cmix_node_name));
     if (status !== undefined) {
@@ -167,12 +180,12 @@ export const conversations = {
 }
 
 
-async function buildResponseText(db: Database, id: string): Promise<string> {
+async function list_text(db: Database, id: string): Promise<[string, number]> {
   // Get a list of user's monitored nodes
   const nodes = await db.listUserNodes(id, BotType.TELEGRAM);
 
   // User isn't monitoring any nodes
-  if (nodes.length <= 0) return `${Icons.ERROR}  You aren't monitoring any nodes\\.`
+  if (nodes.length <= 0) return [`${Icons.ERROR}  You aren't monitoring any nodes\\.`, nodes.length]
 
   let node_list = "";
 
@@ -190,78 +203,5 @@ async function buildResponseText(db: Database, id: string): Promise<string> {
     node_list += line + "\n";
   });
 
-  return `You are monitoring ${nodes.length} node${nodes.length > 1 ? "s" : ""}:\n${node_list}`;
+  return [`You are monitoring ${pluralize(nodes, "node")}:\n${node_list}`, nodes.length];
 }
-
-
-//         export async function execute(interaction: ChatInputCommandInteraction, db: Database) {
-//           const subcommand = interaction.options.getSubcommand();
-//           const user = interaction.user;
-//           const channel = interaction.channel
-//             ? interaction.channel
-//             : await interaction.client.channels.fetch(interaction.channelId);
-//           const eph = channel ? (!channel.isDMBased() ? true : false) : false; // make the message ephemeral / visible only to user if not in dm
-//           let reply_string = ``;
-        
-//           switch (subcommand) {
-//             case "add": {
-//               const cmix_id = interaction.options.getString('id', true);
-//               const cmix_node_name = interaction.options.getString('name', false);
-        
-//   
-//                 }
-//               } else {
-//                 // User is already monitoring this node
-//                 reply_string = `${Icons.ERROR}  Error: You are already monitoring ${prettify_address_alias(cmix_node_name, cmix_id)}.`;
-//               }
-        
-//               break;
-//             }
-        
-        
-//             case "remove": {
-//               const cmix_id = interaction.options.getString('id', true);
-        
-//               // Get list of users subscriptions
-//               const [_, deleted] = await db.deleteNode(user.id, cmix_id);
-//               if (deleted.length) {
-//                 // Deleted node successfully
-//                 reply_string = `${Icons.DELETE}  You are no longer monitoring ${prettify_address_alias(deleted[0].name, cmix_id)}.`;
-//               } else {
-//                 // Node wasn't monitored
-//                 reply_string = `${Icons.ERROR}  Error: You are not monitoring ${prettify_address_alias(null, cmix_id)}.`;
-//               }
-//               break;
-//             }
-        
-//             case "list": {
-//               reply_string = await buildResponseText(db, user.id)
-//             }
-//           }
-        
-//           await interaction.reply({ content: reply_string, ephemeral: eph });
-//           const options = interaction.options.data[0].options?.map( (opt) => `${opt.name}: ${opt.value}`)
-//           console.log(`User ${user.id} interaction from ${eph ? "channel" : "dm"}: /${data.name} ${subcommand}${options && ` - ${options.join(', ')}`}`);
-//         }
-        
-//         export async function autocomplete(interaction: AutocompleteInteraction, db: Database) {
-//           const user = interaction.user;
-//           const focusedValue = interaction.options.getFocused();
-        
-//           // Get list of nodes monitored from db
-//           const monitored_nodes = await db.listUserNodes(user.id);
-//           const choices = monitored_nodes.map((entry) => ({
-//             id: entry.node,
-//             text: `${prettify_address_alias(entry.name, entry.node, false)}`,
-//           }));
-//           const filtered = choices.filter((choice) =>
-//             choice.text.toLowerCase().includes(focusedValue.toLowerCase())
-//           );
-        
-//           await interaction.respond(
-//             filtered.map((choice) => ({ name: choice.id, value: choice.id })) // setting name: choice.text should work, but it doesn't. Asked on SO: https://stackoverflow.com/q/74532512/1486966
-//           );
-//         }
-        
-        
-        
