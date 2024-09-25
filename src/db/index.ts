@@ -15,6 +15,7 @@ import type {
 } from "mongodb";
 import type { ClaimRecord, LogActionRecord, MonitorRecord, RecordUpdate } from "./types.js";
 import { BotType } from "../bots/types.js";
+import { SystemChannelFlagsBitField } from "discord.js";
 
 
 export class Database {
@@ -377,7 +378,8 @@ export class Database {
     return db_claimers.map<Staker>( (value): Staker => ({ 
       user_id: value.user,
       wallet: value.wallet,
-      alias: value.alias
+      alias: value.alias,
+      bot_type: value.bot,
     }));
   }
 

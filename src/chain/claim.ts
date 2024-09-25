@@ -3,8 +3,7 @@
 import "@xxnetwork/types";
 import { BN } from "@polkadot/util";
 import { CronJob } from "cron";
-import { codeBlock, spoiler } from "discord.js";
-import { Icons, prettify_address_alias, pluralize, engulph_fetch_claimers } from "../utils.js";
+import { Icons, pluralize, engulph_fetch_claimers } from "../utils.js";
 import { Chain } from "./index.js";
 import { ClaimFrequency } from "./types.js";
 import { ClaimEventData, XXEvent } from "../events/types.js";
@@ -222,7 +221,11 @@ export class Claim {
         rows.push({
           validator,
           eras: Array.from(new Set(available_rewards.map( (value) => value.filter( (value) => Object.keys(value.validators).includes(validator)).map( (value) => value.era.toNumber())).flat())).sort().toString(),
-          users: Array.from(new Set(claimer_rewards_available.map( (staker_payout) => staker_payout.rewards!.filter( (value) => Object.keys(value.validators).includes(validator)).map( (_) => staker_payout.user_id)).flat())).sort().toString(),
+          users: Array.from(new Set(claimer_rewards_available
+            .map( (staker_payout) => staker_payout.rewards!
+              .filter( (value) => Object.keys(value.validators).includes(validator))
+              .map( (_) => `${staker_payout.user_id}${staker_payout.bot_type?` (${staker_payout.bot_type})`:""}`)
+            ).flat())).sort().toString(),
       })}
       console.table(rows)
 
@@ -278,16 +281,13 @@ export class Claim {
           claims_fulfilled.push(...claims_batch.map<EraClaim>( (claim) => ({
             ...claim, 
             fee: partialFee.div(new BN(payoutCalls.length))})));
-
         }
       } catch (e) {
         this.log(`Could not perform one of the claims: ${e}`);
         claims_failed.push(...claims_batch);
       }
     }
-    this.log(
-      `\tClaimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`
-    );
+    this.log(`\tClaimed ${claims_fulfilled.length} payouts, ${claims_failed.length} failed.`);
   
     return [
       {
@@ -307,12 +307,13 @@ export class Claim {
     function eraclaim_to_stakernotify(claims: EraClaim[]): Map<BotType, Map<string, Map<XxWallet, StakerNotify[]>>> {
       // convert EraClaim[] to Map<bot: BotType, Map<id: string, Map<wallet: XxWallet, StakerNotify[]>>>
       const claims_notify = new Map<BotType, Map<string, Map<XxWallet, StakerNotify[]>>>()
-      claims.map( ({era, validator, claimers, fee}) => {
+      claims.map( ({era, claimers, fee}) => {
         claimers.filter( claimer => !!claimer.bot_type )  // claimers without a bot type are skipped
         .map( ({user_id, bot_type, wallet, alias, rewards, available}) => {
-          claims_notify.has(bot_type!) || claims_notify.set(bot_type!, new Map<string, Map<XxWallet, StakerNotify[]>>())
-          claims_notify.get(bot_type!)!.has(user_id) || claims_notify.get(bot_type!)!.set(user_id, new Map<XxWallet, StakerNotify[]>())
-          claims_notify.get(bot_type!)!.get(user_id)!.has(wallet) || claims_notify.get(bot_type!)!.get(user_id)!.set(wallet, [])
+          bot_type = bot_type!
+          claims_notify.has(bot_type) || claims_notify.set(bot_type, new Map<string, Map<XxWallet, StakerNotify[]>>())
+          claims_notify.get(bot_type)!.has(user_id) || claims_notify.get(bot_type)!.set(user_id, new Map<XxWallet, StakerNotify[]>())
+          claims_notify.get(bot_type)!.get(user_id)!.has(wallet) || claims_notify.get(bot_type)!.get(user_id)!.set(wallet, new Array<StakerNotify>())
           const reward = rewards.find( (reward) => reward.era.toNumber() === era)!
           const staker_notify: StakerNotify = {
             user_id: user_id,
@@ -324,7 +325,7 @@ export class Claim {
             validators: Object.keys(reward.validators),
             fee: fee?.divn(claimers.length) // this further divids the fee by the number of claimers
           }
-          claims_notify.get(bot_type!)!.get(user_id)!.get(wallet)?.push(staker_notify)
+          claims_notify.get(bot_type)!.get(user_id)!.get(wallet)!.push(staker_notify)
         })
       })
       return claims_notify;
@@ -390,4 +391,4 @@ export class Claim {
   }
 }
 
-export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.NOMINATOR}=nominator, ${Icons.VALIDATOR}=validator`;
+export const ClaimLegend: string = `Key: ${Icons.WALLET}=wallet, ${Icons.VALIDATOR}=validator, ${Icons.NOMINATOR}=nominator`;

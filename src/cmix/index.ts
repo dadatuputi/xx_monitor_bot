@@ -1,14 +1,12 @@
 import { CronJob } from "cron";
 import { Database } from "../db/index.js";
-import { Icons, prettify_address_alias } from "../utils.js";
+import { Icons } from "../utils.js";
 import { StatusCmix, } from "./types.js";
-import { inlineCode, spoiler } from "discord.js";
 import { NameEventData, StatusEventData, XXEvent } from "../events/types.js";
 import cronstrue from "cronstrue";
 import PubSub from 'pubsub-js';
 
 import type { CmixNode } from './types.js'
-import { BotType } from "../bots/types.js";
 
 // Polls the dashboard API and gets the entire list of nodes per the CMIX_CRON schedule
 

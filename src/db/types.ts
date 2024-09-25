@@ -1,5 +1,6 @@
 import type { Document, OptionalId } from "mongodb";
 import type { BN } from "@polkadot/util";
+import type { BotType } from "../bots/types";
 
 export interface RecordUpdate {
   key: string,
@@ -9,7 +10,7 @@ export interface RecordUpdate {
 
 interface XxRecord extends OptionalId<Document> {
   user: string; // unique chat client user id
-  bot: string; // bot type 
+  bot: BotType; // bot type 
 }
 
 export interface ClaimRecord extends XxRecord {

@@ -18,6 +18,7 @@ export enum Icons {
   DIAMOND = "💎",
   ADD = "➕",
   HASH = "#️⃣",
+  DEV = "🔧"
 }
 
 export const XX_ID_LEN = 44;

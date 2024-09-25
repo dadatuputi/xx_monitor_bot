@@ -35,6 +35,10 @@ export async function execute(ctx: XXContext, db: Database) {
     // Add remove button if monitoring nodes
     if (num_claims > 0)
         inlineKeyboard.text(`${Icons.DELETE} Remove Claim`, `${name}-remove`)
+    // Add 'claim all' button if in dev mode
+    if (process.env.NODE_ENV === "development") {
+        inlineKeyboard.text(`${Icons.DEV} All`, `${name}-all`)
+    }
 
     // First display a list of monitored nodes, if any
     await ctx.reply(
@@ -95,6 +99,10 @@ export const callbacks = {
         await ctx.conversation.enter(`${name}-remove`);
         await ctx.answerCallbackQuery(); // clean up loading animation
     },
+    all: async (ctx: XXContext, db: Database) => {
+        await ctx.conversation.enter(`${name}-all`);
+        await ctx.answerCallbackQuery(); // clean up loading animation
+    }
 };
 
 export const conversations = {
@@ -129,7 +137,7 @@ export const conversations = {
                 })
             frequency = await conversation.form.text();
         }
-
+        
         // Get Wallet
         ctx.reply(
             "Please provide a wallet to initiate rewards payouts\\.",
@@ -171,7 +179,8 @@ export const conversations = {
                 `${Icons.ERROR}  Executing claim now, please standby\\.`,
                 {
                     parse_mode: "MarkdownV2"
-                });
+                }
+            );
 
         } else {
 
@@ -238,6 +247,29 @@ export const conversations = {
                 parse_mode: "MarkdownV2",
                 reply_markup: inlineKeyboard,
             },
+        );
+    },
+    all: async (conversation: XXConversation, ctx: XXContext, db: Database) => {
+        async function doit(): Promise<void> {
+            const cfg: ClaimConfig = {
+                frequency: ClaimFrequency.IMMEDIATE,
+                batch: +process.env.CLAIM_BATCH!,
+                wallet: Chain.init_key(JSON.parse(process.env.CLAIM_WALLET!) as KeyringPair$Json, process.env.CLAIM_PASSWORD!),
+                dry_run: true
+            };
+
+            const chain = await Chain.create(process.env.CHAIN_RPC_ENDPOINT!);
+
+            await (await Claim.create(db, chain, cfg)).submit();
+            await chain.api.disconnect();
+        }
+
+        doit()
+        ctx.reply(
+            `${Icons.ERROR}  Executing claim now, please standby\\.`,
+            {
+                parse_mode: "MarkdownV2"
+            }
         );
     }
 }

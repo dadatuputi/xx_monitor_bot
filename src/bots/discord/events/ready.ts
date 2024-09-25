@@ -75,7 +75,7 @@ export function execute(client: DiscordClient, db: Database) {
   PubSub.subscribe([XXEvent.MONITOR_COMMISSION_NEW, BotType.DISCORD].join("."), validator_commission_change)
 
   
-  const claim_results: PubSubJS.SubscriptionListener<ClaimEventData> = async (msg, data) => {
+  const notify_claim_results: PubSubJS.SubscriptionListener<ClaimEventData> = async (msg, data) => {
     const event_data = data!
     const retrows = new Array<string>();
   
@@ -112,9 +112,9 @@ export function execute(client: DiscordClient, db: Database) {
     codeblock.push(ClaimLegend);
 
     retrows.push(spoiler(codeBlock(codeblock.join('\n'))))
-    return retrows;
+    sendToDM(client, data!.user_id, retrows)
   }
-  PubSub.subscribe([XXEvent.CLAIM_EXECUTED, BotType.DISCORD].join("."), claim_results)
+  PubSub.subscribe([XXEvent.CLAIM_EXECUTED, BotType.DISCORD].join("."), notify_claim_results)
 
 
   // Log admin events to admin channel
