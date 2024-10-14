@@ -1,5 +1,14 @@
 version: '3.1'
 name: xx-monitor-bot
+
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "10"
+      compress: "true"
+
 services:
 
   mongo:
@@ -10,9 +19,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD
     volumes:
       - ./mongo/db:/data/db
-    ports:
-      - ${MONGO_PORT}:27017
-    command: --quiet    
+    command: --quiet
+    <<: *default-logging
 
   bot:
     restart: always
@@ -24,19 +32,4 @@ services:
       - NODE_ENV=production
     env_file:
       - .env
-
-  watchtower:
-    # Watchtower will pull down your new image, gracefully shut down your existing container 
-    # and restart it with the same options that were used when it was deployed initially
-    # https://github.com/containrrr/watchtower
-    image: containrrr/watchtower
-    restart: always
-    depends_on: 
-      - bot
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_SCHEDULE
-      - TZ
-      
+    <<: *default-logging

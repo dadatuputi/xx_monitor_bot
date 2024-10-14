@@ -1,5 +1,15 @@
 version: '3.1'
 name: xx-monitor-bot-dev
+
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "10"
+      compress: "true"
+
+
 services:
 
   mongo-express:
@@ -16,7 +26,9 @@ services:
       - ME_CONFIG_MONGODB_PORT=${MONGO_PORT}
       - ME_CONFIG_BASICAUTH_USERNAME
       - ME_CONFIG_BASICAUTH_PASSWORD
+    <<: *default-logging
 
   bot:
     environment:
       - NODE_ENV=development
+    <<: *default-logging
