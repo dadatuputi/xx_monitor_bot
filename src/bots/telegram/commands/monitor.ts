@@ -122,13 +122,16 @@ export const conversations = {
       parse_mode: "MarkdownV2",
       reply_markup: name_keyboard,
     })
-    let cmix_node_name: string | null = null;
-    await conversation.waitForCallbackQuery(["add-no-name"], {
-      otherwise: async (ctx) => {
-        cmix_node_name = await conversation.form.text();
-        await ctx.answerCallbackQuery();
-      }
-    });
+
+    let cmix_node_name: string = cmix_id;
+    const name_response = await conversation.waitFor(['message:text', 'callback_query:data']);
+    
+    if (name_response.callbackQuery?.data === 'add-no-name') {
+      await name_response.answerCallbackQuery();
+    } else if (name_response.message?.text) {
+      cmix_node_name = name_response.message.text.trim() || cmix_id;
+    }
+
     console.log(`friendly name is: ${cmix_node_name}`)
     // returns false if the user is already monitoring this node/name combination
     const status = await conversation.external(() => db.addNode(ctx.from!.id.toString(), BotType.TELEGRAM, cmix_id, cmix_node_name));

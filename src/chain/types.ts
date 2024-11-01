@@ -76,9 +76,9 @@ export interface ClaimConfig {
   dry_run?: boolean
 }
 
-export interface ExternalStakerConfig {
-  fn: Function,
-  args: {[key: string]: any}
+export interface ExternalStakerConfig<T extends {[key: string]: any} = {[key: string]: any}> {
+  args: T,
+  fn: (args: T) => Promise<Array<Staker>>,
 }
 
 export interface CommissionChange {

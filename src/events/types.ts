@@ -1,6 +1,6 @@
 import { Chain } from "../chain";
 import { ClaimFrequency, CommissionChange, StakerNotify, XxWallet } from "../chain/types";
-import { CmixID, CmixNode } from "../cmix/types"
+import { CmixID } from "../cmix/types"
 import { BN } from "@polkadot/util";
 
 
@@ -42,4 +42,15 @@ export interface ClaimEventData extends EventData {
 
 export interface CommissionEventData extends UpdateEventData {
     commission_data: CommissionChange
+}
+
+ // Event Receiver Abstract Class
+export abstract class EventReceiver {
+
+    abstract handleMonitorNameNew: PubSubJS.SubscriptionListener<NameEventData>;
+    abstract handleMonitorStatusNew: PubSubJS.SubscriptionListener<StatusEventData>;
+    abstract handleMonitorCommissionNew: PubSubJS.SubscriptionListener<CommissionEventData>;
+    abstract handleClaimExecuted: PubSubJS.SubscriptionListener<ClaimEventData>;
+    abstract handleLogAdmin: PubSubJS.SubscriptionListener<string | string[]>;
+
 }

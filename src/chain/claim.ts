@@ -31,6 +31,7 @@ import type {
 // env guard
 import '../env-guard/chain.js'
 import { BotType } from "../bots/types.js";
+import { vars_in_env } from "../env-guard/index.js";
 
 export async function startAllClaiming(
   db: Database,
@@ -54,14 +55,16 @@ export async function startAllClaiming(
   startClaiming(db, chain_rpc, cfg_daily);
 
   if (process.env.CLAIM_CRON_WEEKLY) {
-    // start irregular claim cron if set
-    startClaiming(db, chain_rpc, cfg_weekly);
-
-    // start external staker claim cron
-    const external_stakers: ExternalStakerConfig = {
-      fn: engulph_fetch_claimers,
-      args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
+    var external_stakers
+    if (process.env.CLAIM_ENDPOINT && process.env.CLAIM_ENDPOINT_KEY){
+      // include external staker claims
+      const external_stakers: ExternalStakerConfig<{endpoint: string, key: string}> = {
+        args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY},
+        fn: engulph_fetch_claimers,
+      }
     }
+
+    // start irregular claim cron if set
     startClaiming(db, chain_rpc, cfg_weekly, external_stakers);
   }
 }
@@ -169,13 +172,10 @@ export class Claim {
 
     // STEP 4 - notify stakers
     this.log("*** Claim Step 4: Notifying stakers of completed claims ***")
-    if (this.external){
-      this.log("\tExternal stakers, skipping")
-    } else {
-      const {success, failure} = await this.notify_stakers([claims_fulfilled, claims_failed])
-      this.log(`\tNotified ${success} users of a payout`)
-      this.log(`\t${failure} users had failed payouts`)
-    }
+    const {success, failure} = await this.notify_stakers([claims_fulfilled, claims_failed])
+    this.log(`\tNotified ${success} users of a payout`)
+    this.log(`\t${failure} users had failed payouts`)
+
     // disconnect
     this.log(`Disconnecting from ${this.chain.endpoint}`)
     this.chain.api.disconnect();

@@ -37,3 +37,4 @@ export class Command {   // from https://stackoverflow.com/a/51398471/1486966
   
     toString() { return this.name; }
   }
+  

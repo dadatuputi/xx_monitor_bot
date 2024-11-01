@@ -3,6 +3,8 @@ import { Database } from '../../db';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from "node:fs";
+import { BN } from "@polkadot/util";
+import { CommissionEventData, EventReceiver } from '../../events/types'
 
 import {
     type Conversation,
@@ -15,11 +17,14 @@ import PubSub from 'pubsub-js';
 
 
 import type { TelegramCommand, XXContext } from './types.js';
-import { NameEventData, StatusEventData, XXEvent } from "../../events/types.js";
+import { ClaimEventData, NameEventData, StatusEventData, XXEvent } from "../../events/types.js";
 import { Status, StatusIcon } from "../../cmix/types.js";
-import { Icons, prettify_address_alias } from "../../utils.js";
+import { Icons, pluralize, prettify_address_alias } from "../../utils.js";
 import { Other } from "grammy/out/core/api";
 import { BotType } from "../types.js";
+import { Chain } from "../../chain";
+import { ClaimLegend } from "../../chain/claim";
+import { codeBlock, spoiler } from "discord.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,8 +59,6 @@ export async function initTelegram(db: Database, token: string) {
         }
     }
 
-
-
     telegram_bot.api.setMyCommands(commands.map( (command) => ({command: command.name, description: command.description})))
     for(const command of commands) {
         telegram_bot.command(command.name, (ctx) => command.execute(ctx, db)) // register command with callback
@@ -76,79 +79,128 @@ export async function initTelegram(db: Database, token: string) {
         })
     }
 
-    // // debug
-    // async function greeting(conversation: XXConversation, ctx: XXContext){
-    //     console.log(await ctx.conversation)
-    // }
-    // telegram_bot.use(createConversation(greeting))
-    // telegram_bot.command("start", async (ctx) => await ctx.conversation.enter("greeting"));
-
-    // telegram_bot.command("fart", async (ctx) => await ctx.conversation.enter("add"))
-
     await telegram_bot.init();
     telegram_bot.start();
+    const receiver = new TelegramEventReceiver(telegram_bot, db);
+
     console.log(`Telegram bot ready: ${telegram_bot.botInfo.username}`);
+    
+}
 
-    // if (data) {
-    //     var message = `${StatusIcon[data.old_status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[data.new_status.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
-    //     message += `  ${prettify_address_alias(data.node_name, data.node_id)} is now ${data.new_status == Status.ERROR ? "in " : ""}${italic(data.new_status)}`; // new status
-    //     sendToDM(client, data.user_id, message)
-    //   } else log_empty_event(msg)
+class TelegramEventReceiver extends EventReceiver {
 
-    // Subscribe to events
-    //  Validator Status Change
-    const validator_status_change: PubSubJS.SubscriptionListener<StatusEventData> = (msg, data) => {
+    private readonly botType: BotType = BotType.TELEGRAM
+    private bot: Bot<XXContext>;
+    private db: Database;
+
+    constructor(bot: Bot<XXContext>, db: Database) {
+        super();
+        this.bot = bot;
+        this.db = db;
+
+        // Subscribe to events
+        //  Validator Name Change
+        PubSub.subscribe([XXEvent.MONITOR_NAME_NEW, this.botType].join("."), this.handleMonitorNameNew);
+        //  Validator Status Change
+        PubSub.subscribe([XXEvent.MONITOR_STATUS_NEW, this.botType].join("."), this.handleMonitorStatusNew);
+        //  Validator Commission Change
+        PubSub.subscribe([XXEvent.MONITOR_COMMISSION_NEW, this.botType].join("."), this.handleMonitorCommissionNew)
+        // Claim Executed Notification
+        PubSub.subscribe([XXEvent.CLAIM_EXECUTED, this.botType].join("."), this.handleClaimExecuted)
+
+    }
+
+    async sendDM(user_id: string | number, message: string | string[]): Promise<void> {
+
+        const telegram_message_format: Other<RawApi, "sendMessage", "text" | "chat_id"> | undefined =
+        {
+            parse_mode: "MarkdownV2"
+        }
+
+        if (Array.isArray(message)) {
+            for (const msg of message) {
+                await this.bot.api.sendMessage(user_id, msg, telegram_message_format)
+            }
+        }
+        else
+            await this.bot.api.sendMessage(user_id, message, telegram_message_format)
+    }
+
+    handleMonitorStatusNew: PubSubJS.SubscriptionListener<StatusEventData> = (msg, data) => {
         if (data) {
             var message = `${StatusIcon[data.old_status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[data.new_status.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
-            message += `  ${prettify_address_alias(data.node_name, data.node_id)} is now ${data.new_status == Status.ERROR ? "in " : ""}_${data.new_status}_`; // new status
-            sendToDM(telegram_bot, data.user_id, message);
+            message += `  ${prettify_address_alias(data.node_name, data.node_id, true, 30)} is now ${data.new_status == Status.ERROR ? "in " : ""}_${data.new_status}_`; // new status
+            this.sendDM(data.user_id, message);
         } else log_empty_event(msg)
     }
-    PubSub.subscribe([XXEvent.MONITOR_STATUS_NEW, BotType.TELEGRAM].join("."), validator_status_change);
 
-
-    //  Validator Name Change
-    const validator_name_change: PubSubJS.SubscriptionListener<NameEventData> = (msg, data) => {
-        if (data){
-            const retrows = new Array<string>();
-      
-            if (!data.wallet_address) {
-              retrows.push(`${Icons.UPDATE} Monitored node ${prettify_address_alias(null, data.node_id, true)} name updated: \`${data.old_name ? data.old_name : 'empty'}\`${Icons.TRANSIT}\`${data.node_name!}\``)
-            } else {
-              retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, data.wallet_address, true, 48)} alias updated: \`${data.old_name ? data.old_name : 'empty'}\`${Icons.TRANSIT}\`${data.node_name!}\``)
-            }
-            sendToDM(telegram_bot, data.user_id, retrows)
-      
-        } else log_empty_event(msg)
-    }
-    PubSub.subscribe([XXEvent.MONITOR_NAME_NEW, BotType.TELEGRAM].join("."), validator_name_change);
-
-    // //  Validator Commission Change
-    // const validator_commission_change: PubSubJS.SubscriptionListener<CommissionChange> = async (msg, data) => {
-    //     if (data) {
-    //     for(const record of await db.updateNodeCommission(data.cmix_id, data.commission)){
-    //         const commission_update = `${Chain.commissionToHuman(data.commission_previous, data.chain_decimals)}${Icons.TRANSIT}${Chain.commissionToHuman(data.commission, data.chain_decimals)}`
-    //         const retrows = new Array<string>();
-    //         retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(record.name, record.node, true)} commission ${data.commission_previous<data.commission? 'increased' : 'decreased'}: ${commission_update}`)
-    //         sendToDM(client, record.user, retrows);
-    //     }
-    //     }
-    // }
-    // PubSub.subscribe(XXEvent.VALIDATOR_COMMISSION_CHANGE_TELEGRAM, validator_commission_change)
-}
-
-async function sendToDM(bot: Bot<XXContext>, user_id: string | number, message: string | string[]): Promise<any> {
-
-    if (Array.isArray(message)) {
-        for (const msg of message) {
-            await bot.api.sendMessage(user_id, msg, telegram_message_format)
+    handleMonitorNameNew: PubSubJS.SubscriptionListener<NameEventData> = (msg, data) => {
+        const validator_name_change: PubSubJS.SubscriptionListener<NameEventData> = (msg, data) => {
+            if (data){
+                const retrows = new Array<string>();
+        
+                if (!data.wallet_address) {
+                retrows.push(`${Icons.UPDATE} Monitored node ${prettify_address_alias(null, data.node_id, true)} name updated: \`${data.old_name ? data.old_name : 'empty'}\` ${Icons.TRANSIT} \`${data.node_name!}\``)
+                } else {
+                retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, data.wallet_address, true, 48)} alias updated: \`${data.old_name ? data.old_name : 'empty'}\` ${Icons.TRANSIT} \`${data.node_name!}\``)
+                }
+                this.sendDM(data.user_id, retrows)
+        
+            } else log_empty_event(msg)
         }
     }
-    else
-        await bot.api.sendMessage(user_id, message, telegram_message_format)
-}
 
-export const telegram_message_format: Other<RawApi, "sendMessage", "text" | "chat_id"> | undefined =
-{
-    parse_mode: "MarkdownV2"
+    handleMonitorCommissionNew: PubSubJS.SubscriptionListener<CommissionEventData> = async (msg, data) => {
+        if (data) {
+            const commission_update = `${Chain.commissionToHuman(data.commission_data.commission_previous)}${Icons.TRANSIT}${Chain.commissionToHuman(data.commission_data.commission)}`
+            const retrows = new Array<string>();
+            retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(data.node_name, data.node_id, true)} commission ${data.commission_data.commission_previous < data.commission_data.commission? 'increased' : 'decreased'}: ${commission_update}`)
+            this.sendDM(data.user_id, retrows);
+          }
+    }
+
+    handleClaimExecuted: PubSubJS.SubscriptionListener<ClaimEventData> = async (msg, data) => {
+        const event_data = data!
+        const retrows = new Array<string>();
+
+        // header is always the same
+        const wallets = Array.from(event_data.wallets.keys())
+        const claim_total_xx = event_data.chain.xx_bal_usd_string(event_data.claim_total, await event_data.chain.price_promise)
+        retrows.push(`${event_data.success ? `${event_data.frequency.symbol} claim results: ${claim_total_xx}` : 'failed '}: ${pluralize(event_data.eras, 'era')} | ${pluralize(wallets, 'wallet')}`);
+        
+        // msg format
+        // Daily claim results: 100 xx ($100.00): 1 eras | 6 wallets
+        //     alias / xxxxxx:
+        //         Era xxx: xx/$ as validator|nominator of xxxxx
+        const codeblock = new Array<string>();
+        for (const [wallet, stakers_notify] of event_data.wallets) {
+            // build the top wallet string: alias / xxxxxx:
+            const alias: string | undefined | null = stakers_notify.find( (claim_notify) => Boolean(claim_notify.alias) )?.alias;
+            codeblock.push(`${Icons.WALLET} ${prettify_address_alias(alias, wallet, false, 30)}:`);
+            
+            for (const staker_notify of stakers_notify) {
+                // build the era line: Era xxx: xx
+                const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR}⭆${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 9)).join(", ")}`;
+                const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
+                const _era_total_xx = event_data.chain.xx_bal_usd_string(staker_notify.payout, await event_data.chain.price_promise)
+                codeblock.push(`  Era ${staker_notify.era}: ${_era_total_xx} ${_val_nom_info}`);
+            };
+        };
+
+        const _total_fee: BN = [ ...event_data.wallets.values() ].flat().reduce( (acc, val) => acc.add(val.fee ?? new BN(0)), new BN(0));
+        codeblock.push("");
+        codeblock.push(`  Fee: ${event_data.chain.xx_bal_string(_total_fee)} of ${event_data.chain.xx_bal_string(event_data.claim_wallet_bal)} in ${Icons.BOT} wallet`)
+        if (event_data.claim_wallet_bal.lt(new BN(10000*(10**Chain.decimals)))) codeblock.push(`  To support this bot, type /donate`) // print donate pitch if wallet is < 10000 xx
+        codeblock.push("");
+
+        codeblock.push(ClaimLegend);
+
+        retrows.push(spoiler(codeBlock(codeblock.join('\n'))))
+        this.sendDM(event_data.user_id, retrows)
+    }
+
+    handleLogAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
+
+    }
+
 }

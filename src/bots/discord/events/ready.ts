@@ -1,7 +1,7 @@
 import { Events, ActivityType, inlineCode, italic, spoiler, codeBlock } from "discord.js";
 import { Icons, pluralize, prettify_address_alias } from "../../../utils.js";
 import { Chain } from "../../../chain/index.js";
-import { ClaimEventData, CommissionEventData, NameEventData, StatusEventData, XXEvent } from "../../../events/types.js";
+import { ClaimEventData, CommissionEventData, EventReceiver, NameEventData, StatusEventData, XXEvent } from "../../../events/types.js";
 import { sendToChannel, sendToDM } from "../messager.js";
 import PubSub from 'pubsub-js';
 
@@ -17,6 +17,8 @@ import { ClaimLegend } from "../../../chain/claim.js";
 
 export const name = Events.ClientReady;
 export const once = true;
+
+const botType = BotType.DISCORD;
 
 export function execute(client: DiscordClient, db: Database) {
   console.log(`Discord bot ready: ${client.user!.tag}`);
@@ -34,19 +36,38 @@ export function execute(client: DiscordClient, db: Database) {
     });
   }
 
-  // Subscribe to events
-  //  Validator Status Change
-  const validator_status_change: PubSubJS.SubscriptionListener<StatusEventData> = (msg, data) => {
-    if (data) {
-      var message = `${StatusIcon[data.old_status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[data.new_status.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
-      message += `  ${prettify_address_alias(data.node_name, data.node_id)} is now ${data.new_status == Status.ERROR ? "in " : ""}${italic(data.new_status)}`; // new status
-      sendToDM(client, data.user_id, message)
-    } else log_empty_event(msg)
-  }
-  PubSub.subscribe([XXEvent.MONITOR_STATUS_NEW, BotType.DISCORD].join("."), validator_status_change);
+  const reciever = new DiscordEventReceiver(client, db);
 
-  //  Validator Name Change
-  const validator_name_change: PubSubJS.SubscriptionListener<NameEventData> = (msg, data) => {
+  // Notify on startup
+  PubSub.publish([XXEvent.LOG_ADMIN, botType].join("."), "Discord bot started")
+}
+
+class DiscordEventReceiver extends EventReceiver {
+
+  private readonly botType: BotType = BotType.DISCORD
+  private bot: DiscordClient
+  private db: Database;
+
+  constructor(bot: DiscordClient, db: Database) {
+      super();
+      this.bot = bot;
+      this.db = db;
+
+      // Subscribe to events
+      //  Validator Name Change
+      PubSub.subscribe([XXEvent.MONITOR_NAME_NEW, this.botType].join("."), this.handleMonitorNameNew);
+      //  Validator Status Change
+      PubSub.subscribe([XXEvent.MONITOR_STATUS_NEW, this.botType].join("."), this.handleMonitorStatusNew);
+      //  Validator Commission Change
+      PubSub.subscribe([XXEvent.MONITOR_COMMISSION_NEW, this.botType].join("."), this.handleMonitorCommissionNew)
+      // Claim Executed Notification
+      PubSub.subscribe([XXEvent.CLAIM_EXECUTED, this.botType].join("."), this.handleClaimExecuted)
+      // Log admin events to admin channel
+      PubSub.subscribe([XXEvent.LOG_ADMIN, this.botType].join("."), this.handleLogAdmin);
+
+  }
+
+  handleMonitorNameNew: PubSubJS.SubscriptionListener<NameEventData> = (msg, data) => {
     if (data){
       const retrows = new Array<string>();
 
@@ -57,25 +78,29 @@ export function execute(client: DiscordClient, db: Database) {
         retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(null, data.wallet_address, true, 48)} alias updated: ${inlineCode(data.old_name ? data.old_name : 'empty')}${Icons.TRANSIT}${inlineCode(data.node_name!)}`)
         retrows.push(`${Icons.UPDATE} ${spoiler(`Use command ${inlineCode('/claim')} to set your own alias and stop name updates from the dashboard`)}`)
       }
-      sendToDM(client, data.user_id, retrows)
+      sendToDM(this.bot, data.user_id, retrows)
 
     } else log_empty_event(msg)
   }
-  PubSub.subscribe([XXEvent.MONITOR_NAME_NEW, BotType.DISCORD].join("."), validator_name_change);
-  
-  //  Validator Commission Change
-  const validator_commission_change: PubSubJS.SubscriptionListener<CommissionEventData> = async (_, data) => {
+
+  handleMonitorStatusNew: PubSubJS.SubscriptionListener<StatusEventData> = (msg, data) => {
+    if (data) {
+      var message = `${StatusIcon[data.old_status.toUpperCase() as keyof typeof Status]} ${Icons.TRANSIT} ${StatusIcon[data.new_status.toUpperCase() as keyof typeof Status]}`; // old -> new status icon
+      message += `  ${prettify_address_alias(data.node_name, data.node_id)} is now ${data.new_status == Status.ERROR ? "in " : ""}${italic(data.new_status)}`; // new status
+      sendToDM(this.bot, data.user_id, message)
+    } else log_empty_event(msg)
+  }
+
+  handleMonitorCommissionNew: PubSubJS.SubscriptionListener<CommissionEventData> = (msg, data) => {
     if (data) {
       const commission_update = `${Chain.commissionToHuman(data.commission_data.commission_previous)}${Icons.TRANSIT}${Chain.commissionToHuman(data.commission_data.commission)}`
       const retrows = new Array<string>();
       retrows.push(`${Icons.UPDATE} Validator ${prettify_address_alias(data.node_name, data.node_id, true)} commission ${data.commission_data.commission_previous < data.commission_data.commission? 'increased' : 'decreased'}: ${commission_update}`)
-      sendToDM(client, data.user_id, retrows);
+      sendToDM(this.bot, data.user_id, retrows);
     }
   }
-  PubSub.subscribe([XXEvent.MONITOR_COMMISSION_NEW, BotType.DISCORD].join("."), validator_commission_change)
 
-  
-  const notify_claim_results: PubSubJS.SubscriptionListener<ClaimEventData> = async (msg, data) => {
+  handleClaimExecuted: PubSubJS.SubscriptionListener<ClaimEventData> = async (msg, data) => {
     const event_data = data!
     const retrows = new Array<string>();
   
@@ -112,19 +137,11 @@ export function execute(client: DiscordClient, db: Database) {
     codeblock.push(ClaimLegend);
 
     retrows.push(spoiler(codeBlock(codeblock.join('\n'))))
-    sendToDM(client, data!.user_id, retrows)
+    sendToDM(this.bot, event_data.user_id, retrows)
   }
-  PubSub.subscribe([XXEvent.CLAIM_EXECUTED, BotType.DISCORD].join("."), notify_claim_results)
 
-
-  // Log admin events to admin channel
-  const logAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
-    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(client, process.env.ADMIN_NOTIFY_CHANNEL, data);
+  handleLogAdmin: PubSubJS.SubscriptionListener<string | string[]> = (msg, data) => {
+    process.env.ADMIN_NOTIFY_CHANNEL && data !== undefined && sendToChannel(this.bot, process.env.ADMIN_NOTIFY_CHANNEL, data);
   }
-  PubSub.subscribe(XXEvent.LOG_ADMIN, logAdmin);
-
-
-
-  // Notify on startup
-  PubSub.publish(XXEvent.LOG_ADMIN, "Discord bot started")
+  
 }
