@@ -1,7 +1,7 @@
 // built this file with inspiration from https://github.com/w3f/polkadot-k8s-payouts/blob/master/src/actions/start.ts
 
 import "@xxnetwork/types";
-import { BN } from "@polkadot/util";
+import { BN } from "@polkadot/util/bn/bn";
 import { CronJob } from "cron";
 import { Icons, pluralize, engulph_fetch_claimers } from "../utils.js";
 import { Chain } from "./index.js";
@@ -13,9 +13,10 @@ import PubSub from 'pubsub-js';
 
 import type { Database } from "../db/index.js";
 import type { ChalkInstance } from 'chalk';
-import type { SubmittableExtrinsic } from "@polkadot/api/types/submittable.js";
-import type { ISubmittableResult } from "@polkadot/types/types/extrinsic.js";
+import type { SubmittableExtrinsic } from "@polkadot/api-base/types/submittable";
+import type { ISubmittableResult } from "@polkadot/types/types/extrinsic";
 import type { KeyringPair$Json } from "@polkadot/keyring/types";
+import type { DeriveStakerReward, DeriveStakerRewardValidator } from '@polkadot/api-derive/staking/types';
 import type {
   Staker,
   StakerRewards,
@@ -58,7 +59,7 @@ export async function startAllClaiming(
     var external_stakers
     if (process.env.CLAIM_ENDPOINT && process.env.CLAIM_ENDPOINT_KEY){
       // include external staker claims
-      const external_stakers: ExternalStakerConfig<{endpoint: string, key: string}> = {
+      const external_stakers: ExternalStakerConfig = {
         args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY},
         fn: engulph_fetch_claimers,
       }
@@ -188,11 +189,11 @@ export class Claim {
 
     try {
       // get all available rewards for all claimer wallets
-      const claimer_wallet_addresses: string[] = stakers.map((value) => value.wallet);
+      const claimer_wallet_addresses: XxWallet[] = stakers.map((value) => value.wallet);
       const available_eras = await this.chain.api.derive.staking.erasHistoric();
       // stakerRewardsMultiEras builds an array (one for each claimer_wallet_address) of arrays (one for each era) of DeriveStakerReward
       // from https://github.com/polkadot-js/apps/blob/85c3af2055ff55a26fb77f8dd4de6d584055c579/packages/react-hooks/src/useOwnEraRewards.ts#L104
-      const available_rewards = await this.chain.api.derive.staking.stakerRewardsMultiEras(claimer_wallet_addresses, available_eras);
+      const available_rewards: DeriveStakerReward[][] = await this.chain.api.derive.staking.stakerRewardsMultiEras(claimer_wallet_addresses, available_eras);
 
       // plug staker rewards into staker payout items - assumes that stakerRewardsMultiEras rpc returns an array of same length & indexing as stakers 
       const claimer_rewards = stakers.map<StakerRewards>( (staker_payout, index) => ({
@@ -201,10 +202,22 @@ export class Claim {
       }));
   
       // populate stakers with amount available to claim
-      const claimer_rewards_available = claimer_rewards.map<StakerRewardsAvailable>( (staker_rewards) => ({
-        ...staker_rewards,
-        available: staker_rewards.rewards!.reduce( (acc, current) => acc.iadd(Object.values(current.validators).reduce( (acc, current) => acc.iadd(current.value), new BN(0))), new BN(0))
-      }));
+      const claimer_rewards_available = claimer_rewards.map<StakerRewardsAvailable>((staker_rewards) => {
+        // First reduce: sum up all validator rewards for each era
+        const totalAvailable = staker_rewards.rewards!.reduce((eraAcc: BN, current: DeriveStakerReward) => {
+          // Second reduce: sum up all validator rewards within an era
+          const eraTotal = Object.values(current.validators).reduce<BN>((valAcc: BN, current: DeriveStakerRewardValidator) => {
+            return valAcc.iadd(current.value);
+          }, new BN(0));
+          
+          return eraAcc.iadd(eraTotal);
+        }, new BN(0));
+      
+        return {
+          ...staker_rewards,
+          available: totalAvailable
+        };
+      });
 
   
       // log summary of what rewards are available
@@ -260,7 +273,7 @@ export class Claim {
           
           if (!this.cfg.dry_run) {
             this.log(`Submitting ${transactions.length} in batch`)
-            const unsub = await transactions.signAndSend(this.cfg.wallet, { nonce: -1 }, ({ events = [], status }) =>
+            const unsub = await transactions.signAndSend(this.cfg.wallet, { nonce: -1 }, ({ events = [], status }: ISubmittableResult) =>
             {
                 this.log(`Current status is ${status.type}`);
                 if (status.isInBlock) {

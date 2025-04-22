@@ -6,7 +6,6 @@
 import type { Observable } from "rxjs";
 import type { DeriveStakingQuery } from "@polkadot/api-derive/staking/types";
 import type {
-  DeriveApi,
   DeriveEraPoints,
   DeriveEraPrefs,
   DeriveEraRewards,
@@ -15,10 +14,12 @@ import type {
   DeriveStakerExposure,
   DeriveStakerReward,
   DeriveStakerRewardValidator,
-} from "@polkadot/api-derive/types";
-import type { AccountId, EraIndex } from "@polkadot/types/interfaces";
-import type { PalletStakingStakingLedger } from "@polkadot/types/lookup";
-import type { BN } from "@polkadot/util";
+} from "@polkadot/api-derive/staking/types";
+import type { DeriveApi } from "@polkadot/api-derive/types";
+import type { AccountId } from "@polkadot/types/interfaces/runtime/types";
+import type { EraIndex } from "@polkadot/types/interfaces/staking/types";
+import type { StakingLedger } from "@polkadot/types/interfaces/staking/types"
+import type { BN } from "@polkadot/util/bn/bn";
 
 import { combineLatest, map, of, switchMap } from "rxjs";
 
@@ -166,7 +167,7 @@ function filterRewards(
     stakingLedger,
   }: {
     rewards: DeriveStakerReward[];
-    stakingLedger: PalletStakingStakingLedger;
+    stakingLedger: StakingLedger;
   }
 ): DeriveStakerReward[] {
   const filter = eras.filter(

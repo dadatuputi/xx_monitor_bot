@@ -1,7 +1,7 @@
-import { Chain } from "../chain";
-import { ClaimFrequency, CommissionChange, StakerNotify, XxWallet } from "../chain/types";
-import { CmixID } from "../cmix/types"
-import { BN } from "@polkadot/util";
+import { Chain } from "../chain/index.js";
+import { ClaimFrequency, CommissionChange, StakerNotify, XxWallet } from "../chain/types.js";
+import { CmixID } from "../cmix/types.js"
+import { BN } from "@polkadot/util/bn/bn";
 
 
 export enum XXEvent {

@@ -1,5 +1,5 @@
 import { inlineCode } from "discord.js";
-import type { ExternalStaker, Staker } from "./chain/types";
+import type { ExternalStaker, Staker, XxWallet } from "./chain/types.js";
 
 export enum Icons {
   WATCH = "👀",
@@ -45,15 +45,16 @@ function truncate(text: string, length: number = XX_ID_LEN): string {
 // take a pretty name and an id and combine; if no name provided, just return id
 export function prettify_address_alias(
   name: string | null | undefined,
-  id: string,
+  id: XxWallet,
   codify: boolean = true,
   maxlen: number = XX_ID_LEN
 ) {
   let retval: string;
+  const ids = id as string
   if (!name) {
     // if there's no name, just truncate the id and return
-    retval = truncate(id, maxlen);
-  } else if(id.length + name.length + ADDRESS_ALIAS_SEPARATOR.length <= maxlen) {
+    retval = truncate(ids, maxlen);
+  } else if(ids.length + name.length + ADDRESS_ALIAS_SEPARATOR.length <= maxlen) {
     // if the name and id are somehow less than the max, just return untruncated
     retval = `${name} / ${id}`
   } else {
@@ -62,10 +63,10 @@ export function prettify_address_alias(
     if (truncate_name) {
       const name_truncate_len: number = maxlen - ADDRESS_ALIAS_SEPARATOR.length - ADDRESS_ALIAS_MIN_ID;
       name = truncate(name, name_truncate_len);
-      id = truncate(id, ADDRESS_ALIAS_MIN_ID);
+      id = truncate(ids, ADDRESS_ALIAS_MIN_ID);
     } else {
       const id_truncate_len: number = maxlen - ADDRESS_ALIAS_SEPARATOR.length - name.length;
-      id = truncate(id, id_truncate_len);
+      id = truncate(ids, id_truncate_len);
     }
     retval = `${name} / ${id}`
   }

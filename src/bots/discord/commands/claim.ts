@@ -143,8 +143,8 @@ export async function execute(interaction: ChatInputCommandInteraction, db: Data
       reply_string = "trying to claim";
 
       const external_stakers: ExternalStakerConfig = {
+        args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY},
         fn: engulph_fetch_claimers,
-        args: {endpoint: process.env.CLAIM_ENDPOINT, key: process.env.CLAIM_ENDPOINT_KEY}
       }
 
       async function doit(): Promise<void> {

@@ -5,15 +5,15 @@ import { ClaimEventData, CommissionEventData, EventReceiver, NameEventData, Stat
 import { sendToChannel, sendToDM } from "../messager.js";
 import PubSub from 'pubsub-js';
 
-import type { CommissionChange } from "../../../chain/types.js";
+import type { CommissionChange, XxWallet } from "../../../chain/types.js";
 import type { Database } from "../../../db/index.js";
 import type { DiscordClient } from "../types.js";
 import { CmixNode, Status, StatusIcon } from "../../../cmix/types.js";
 import { MonitorRecord } from "../../../db/types.js";
-import { Data } from "@polkadot/types";
 import { BotType } from "../../types.js";
-import { BN } from "@polkadot/util";
+import { BN } from "@polkadot/util/bn/bn";
 import { ClaimLegend } from "../../../chain/claim.js";
+import { log_empty_event } from "../../../events/index.js";
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -121,7 +121,7 @@ class DiscordEventReceiver extends EventReceiver {
       
       for (const staker_notify of stakers_notify) {
         // build the era line: Era xxx: xx
-        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR}⭆${Icons.VALIDATOR} ${staker_notify.validators.map( (validator) => prettify_address_alias(null, validator, false, 9)).join(", ")}`;
+        const _nominator_string = staker_notify.isValidator ? "" : `${Icons.NOMINATOR}⭆${Icons.VALIDATOR} ${staker_notify.validators.map( (validator: XxWallet) => prettify_address_alias(null, validator, false, 9)).join(", ")}`;
         const _val_nom_info = `as ${staker_notify.isValidator ? Icons.VALIDATOR : _nominator_string}`
         const _era_total_xx = event_data.chain.xx_bal_usd_string(staker_notify.payout, await event_data.chain.price_promise)
         codeblock.push(`  Era ${staker_notify.era}: ${_era_total_xx} ${_val_nom_info}`);

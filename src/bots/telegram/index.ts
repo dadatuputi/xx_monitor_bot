@@ -1,10 +1,10 @@
 import { Bot, Context, RawApi, session } from "grammy";
-import { Database } from '../../db';
+import { Database } from '../../db/index.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from "node:fs";
-import { BN } from "@polkadot/util";
-import { CommissionEventData, EventReceiver } from '../../events/types'
+import { BN } from "@polkadot/util/bn/bn";
+import { CommissionEventData, EventReceiver } from '../../events/types.js'
 
 import {
     type Conversation,
@@ -20,10 +20,11 @@ import type { TelegramCommand, XXContext } from './types.js';
 import { ClaimEventData, NameEventData, StatusEventData, XXEvent } from "../../events/types.js";
 import { Status, StatusIcon } from "../../cmix/types.js";
 import { Icons, pluralize, prettify_address_alias } from "../../utils.js";
-import { Other } from "grammy/out/core/api";
+
+import type { ParseMode } from "grammy/types";
 import { BotType } from "../types.js";
-import { Chain } from "../../chain";
-import { ClaimLegend } from "../../chain/claim";
+import { Chain } from "../../chain/index.js";
+import { ClaimLegend } from "../../chain/claim.js";
 import { codeBlock, spoiler } from "discord.js";
 
 
@@ -112,9 +113,9 @@ class TelegramEventReceiver extends EventReceiver {
 
     async sendDM(user_id: string | number, message: string | string[]): Promise<void> {
 
-        const telegram_message_format: Other<RawApi, "sendMessage", "text" | "chat_id"> | undefined =
+        const telegram_message_format =
         {
-            parse_mode: "MarkdownV2"
+            parse_mode: "MarkdownV2" as ParseMode
         }
 
         if (Array.isArray(message)) {

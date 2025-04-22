@@ -1,10 +1,14 @@
-import type { DeriveStakerReward } from "@polkadot/api-derive/types";
-import type { BN } from "@polkadot/util";
+import type { DeriveStakerReward } from '@polkadot/api-derive/staking/types';
+import type { BN } from "@polkadot/util/bn/bn";
 import type { KeyringPair } from "@polkadot/keyring/types";
-import { CmixID } from "../cmix/types";
-import { BotType } from "../bots/types";
+import type { AccountId32 } from "@polkadot/types/interfaces/runtime/types";
+import type { u32 } from "@polkadot/types/primitive";
+import type { AnyNumber } from "@polkadot/types-codec/types/helpers"
 
-export type XxWallet = string
+import { CmixID } from "../cmix/types.js";
+import { BotType } from "../bots/types.js";
+
+export type XxWallet = AccountId32 | string | Uint8Array
 export class ClaimFrequency {   // from https://stackoverflow.com/a/51398471/1486966
   static readonly DAILY  = new ClaimFrequency('daily', '');
   static readonly WEEKLY  = new ClaimFrequency('weekly', '');
@@ -53,7 +57,7 @@ export interface StakerRewardsAvailable extends StakerRewards {
 
 export interface EraClaim {
   // Used for executing the claim
-  era: number;
+  era: u32 | AnyNumber | Uint8Array;
   validator: XxWallet;
   claimers: StakerRewardsAvailable[];   // all of the claimers for this era/validator, indexed by user_id and wallet
   fee?: BN;
@@ -61,7 +65,7 @@ export interface EraClaim {
 
 export interface StakerNotify extends Staker {
   // everything needed to notify a user of claims made on their behalf
-  era: number;
+  era: u32 | AnyNumber | Uint8Array;
   payout: BN;
   isValidator: boolean;
   validators: XxWallet[];
@@ -76,9 +80,9 @@ export interface ClaimConfig {
   dry_run?: boolean
 }
 
-export interface ExternalStakerConfig<T extends {[key: string]: any} = {[key: string]: any}> {
-  args: T,
-  fn: (args: T) => Promise<Array<Staker>>,
+export interface ExternalStakerConfig {
+  args: {[key: string]: any}, 
+  fn: (args: any) => Promise<Array<Staker>>
 }
 
 export interface CommissionChange {
